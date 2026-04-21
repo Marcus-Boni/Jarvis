@@ -13,11 +13,15 @@ jarvis:
   name: "TestJarvis"
 api:
   port: 9999
+voice:
+  wake_word_mode: "porcupine"
 skills:
   volume:
     enabled: false
   notion:
     default_parent_page_id: "page-123"
+  clipboard:
+    enabled: false
 """.strip(),
         encoding="utf-8",
     )
@@ -29,5 +33,7 @@ skills:
 
     assert settings.jarvis.name == "TestJarvis"
     assert settings.api.port == 9999
+    assert settings.voice.wake_word_mode == "porcupine"
     assert settings.skills.volume.enabled is False
+    assert settings.skills.clipboard.enabled is False
     assert settings.notion.default_parent_id == "page-123"

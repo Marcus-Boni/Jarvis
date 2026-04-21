@@ -56,6 +56,7 @@ class VoiceConfig(BaseModel):
     channels: int = 1
     chunk_size: int = 512
     wake_word_enabled: bool = True
+    wake_word_mode: str = "text"
     stt: SttConfig = Field(default_factory=SttConfig)
     tts: TtsConfig = Field(default_factory=TtsConfig)
     vad: VadConfig = Field(default_factory=VadConfig)
@@ -101,6 +102,10 @@ class AutoMemorySkillConfig(SkillToggleConfig):
 class SkillsConfig(BaseModel):
     app_launcher: AppLauncherSkillConfig = Field(default_factory=AppLauncherSkillConfig)
     browser_search: BrowserSearchSkillConfig = Field(default_factory=BrowserSearchSkillConfig)
+    clipboard: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
+    file_manager: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
+    screenshot: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
+    notification: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
     spotify: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
     notion: NotionSkillSettings = Field(default_factory=NotionSkillSettings)
     outlook: SkillToggleConfig = Field(default_factory=SkillToggleConfig)

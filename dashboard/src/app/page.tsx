@@ -12,6 +12,7 @@ import {
 
 import { ChatShell } from "@/components/chat-shell";
 import { StatusCard } from "@/components/status-card";
+import { AppNav } from "@/components/app-nav";
 import { useJarvisEvents } from "@/hooks/use-jarvis-events";
 import { useJarvisStream } from "@/hooks/use-jarvis-stream";
 import { useJarvisVoice } from "@/hooks/use-jarvis-voice";
@@ -35,8 +36,8 @@ type HealthPayload = {
 const telemetry = [
   { icon: BrainCircuit, label: "Intent Engine", detail: "Zero-shot + cached routing" },
   { icon: DatabaseZap, label: "Memory Layer", detail: "ChromaDB + conversation recall" },
-  { icon: RadioTower, label: "Voice Loop", detail: "Mic capture, STT, TTS, websocket voice" },
-  { icon: ShieldCheck, label: "Safety", detail: "Errors logged and destructive actions guarded" },
+  { icon: RadioTower, label: "Voice Loop", detail: "Wake word, STT, TTS, and websocket voice" },
+  { icon: ShieldCheck, label: "Safety", detail: "Errors logged, file actions guarded, and local auth" },
 ];
 
 export default function HomePage() {
@@ -85,7 +86,7 @@ export default function HomePage() {
       {
         label: "Memory",
         value: "ChromaDB",
-        detail: "Persistent vector memory is active in Phase 1.",
+        detail: "Persistent vector memory with clear and browser tooling.",
         tone: "info" as StatusTone,
       },
       {
@@ -126,30 +127,17 @@ export default function HomePage() {
           <p>Voice, memory, local models, productivity integrations, and safe execution.</p>
         </div>
 
-        <nav className="rail-nav" aria-label="Primary">
-          <a className="nav-item current" href="#workspace">
-            Workspace
-          </a>
-          <a className="nav-item" href="#skills">
-            Skills
-          </a>
-          <a className="nav-item" href="#activity">
-            Activity
-          </a>
-          <a className="nav-item" href="#config">
-            Config
-          </a>
-        </nav>
+        <AppNav />
 
         <section className="rail-meter">
           <div>
             <span className="eyebrow">Runtime</span>
-            <strong>{health?.status === "ok" ? "Phase 1 online" : "Checking backend"}</strong>
+            <strong>{health?.status === "ok" ? "Phase 3 online" : "Checking backend"}</strong>
           </div>
           <div className="meter-track" aria-hidden="true">
             <span className="meter-fill" />
           </div>
-          <p>Text chat, voice websocket, skills, and Chroma memory are wired to the live backend.</p>
+          <p>Text chat, voice, memory, tray-backed runtime, and system skills are wired live.</p>
         </section>
       </aside>
 
@@ -157,7 +145,7 @@ export default function HomePage() {
         <header className="hero panel">
           <div>
             <span className="eyebrow">Realtime Build</span>
-            <h2>Voice, Chroma memory, external skills, and dashboard live wiring</h2>
+            <h2>Wake word, persistent memory, desktop skills, and live dashboard control</h2>
           </div>
           <div className="hero-metrics">
             <div className="metric-tile">

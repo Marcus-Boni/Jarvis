@@ -174,3 +174,67 @@ Why:
 Tradeoff:
 - Concurrent skill execution increases pressure on shared local resources.
 - Results must stay independent enough to avoid ordering assumptions between skills.
+
+## ADR-014: Wake word uses pvporcupine with transcript fallback
+
+- Date: 2026-04-21
+- Status: accepted
+
+Phase 3 adds a Porcupine-backed wake word path for offline detection, but preserves the transcript-based wake word gate when no Picovoice access key is configured.
+
+Why:
+- Continuous STT-only wake word gating is expensive on the main voice path.
+- Porcupine is lightweight and CPU-friendly for always-on detection.
+- The fallback path keeps the assistant usable without an external Picovoice key.
+
+Tradeoff:
+- Porcupine requires an access key and an extra local dependency.
+- Two wake word modes now need to stay behaviorally aligned.
+
+## ADR-015: System tray runs in a dedicated daemon thread
+
+- Date: 2026-04-21
+- Status: accepted
+
+The Windows tray icon runs in a dedicated daemon thread so the UI loop does not block the FastAPI runtime event loop.
+
+Why:
+- `pystray.Icon.run()` is blocking by design.
+- The backend still needs to keep its main async loop free for HTTP, WebSocket, and voice work.
+- Windows permits the tray loop to run outside the main thread.
+
+Tradeoff:
+- Tray actions must cross thread boundaries safely.
+- Runtime-dependent tray behavior remains harder to test automatically than plain API code.
+
+## ADR-016: FileManagerSkill is read-only by default
+
+- Date: 2026-04-21
+- Status: accepted
+
+The Phase 3 file manager can search, list, preview, and open files, but it does not expose destructive operations.
+
+Why:
+- Voice and chat flows do not yet provide a robust confirmation UX for file deletion or moving.
+- Read-only actions already unlock most of the practical desktop assistance value.
+- Keeping the skill non-destructive lowers the risk of accidental user harm.
+
+Tradeoff:
+- Users still need to perform destructive file operations outside Jarvis for now.
+- The skill will need a confirmation contract before Phase 4 can expand it.
+
+## ADR-017: Screenshots are stored under data/screenshots without automatic cleanup
+
+- Date: 2026-04-21
+- Status: accepted
+
+Screenshots are persisted to disk under `data/screenshots/` and remain there until the user deletes them explicitly.
+
+Why:
+- Predictable file persistence is easier to reason about than silent rotation or cleanup.
+- Screenshot capture is a user-visible artifact that may need manual inspection after the fact.
+- Cleanup policies can be layered later once the usage pattern is clearer.
+
+Tradeoff:
+- Disk usage may grow over time.
+- Retention policy remains a future configuration concern.

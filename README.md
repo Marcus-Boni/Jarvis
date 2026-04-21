@@ -26,12 +26,25 @@ Jarvis is a local-first personal AI assistant for a software developer. The syst
 - `IntentCache` com TTL de 5 minutos e capacidade de 128 entradas
 - Skill chaining paralelo com `asyncio.gather` para intents compostas
 
-### Phase 3 - Planned
-- Wake word "Jarvis" via `pvporcupine`
-- File management skill
-- Clipboard skill
-- Screenshot + OCR skill
-- System tray icon
+### Phase 3 - System Integration
+- Wake word "Jarvis" via `pvporcupine` with transcript fallback
+- System Tray com icone procedural, menu rapido, e quit seguro
+- `ClipboardSkill`: leitura e escrita na area de transferencia
+- `FileManagerSkill`: busca, listagem, preview e abertura de arquivos (read-only)
+- `ScreenshotSkill`: captura full screen e janela ativa via `mss`/Win32
+- `NotificationSkill`: toast notifications via PowerShell/Windows UI
+- Dashboard: pagina `/settings` para toggle de skills
+- Dashboard: pagina `/memory` para busca e limpeza do ChromaDB
+- Endpoint `POST /api/memory/clear` adicionado
+- Endpoint `POST /api/webhooks/command` para comando externo
+- ADR-014 a ADR-017 documentados
+
+### Phase 4 - Planned
+- File operations com confirmacao via dialogo
+- Politica de retencao de screenshots configuravel
+- Skill de agendamento (cron-like via APScheduler)
+- Exportar conversa para PDF/Markdown
+- Atualizacao OTA dos modelos Piper e Whisper
 
 ## Repository Layout
 
@@ -90,11 +103,13 @@ make dashboard
 - `GET /api/skills`
 - `POST /api/skills/{skill_name}`
 - `POST /api/memory/query`
+- `POST /api/memory/clear`
+- `POST /api/webhooks/command`
 - `WS /ws/chat`
 - `WS /ws/voice`
 - `WS /ws/events`
 
 ## Notes
 
-- Backend verification in this session: pending fresh Phase 2 validation after the new changes.
+- Backend verification in this session: pending fresh Phase 3 validation after the new changes.
 - External runtime integrations still depend on local credentials, models, binaries, audio devices, and provider consent flows being present on the target machine.

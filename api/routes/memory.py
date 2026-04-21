@@ -28,3 +28,11 @@ async def query_memory(
 
     items = await container.memory_store.query(query_text=payload.query, limit=payload.limit)
     return {"items": [item.model_dump() for item in items]}
+
+
+@router.post("/clear", dependencies=[Depends(require_local_token)])
+async def clear_memory(container: ContainerDependency) -> dict[str, str]:
+    """Clear all stored memory documents."""
+
+    container.memory_store.clear_all()
+    return {"status": "cleared"}

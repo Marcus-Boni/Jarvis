@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -10,11 +12,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from api.routes import chat, memory, skills, voice
+from api.routes import chat, memory, skills, voice, webhooks
 from api.websocket.handler import websocket_router
 from core.config import AppSettings
 from core.logging import configure_logging, get_logger
 from core.service_container import ServiceContainer
+from core.system_tray import JarvisTrayIcon
 
 
 @asynccontextmanager
@@ -27,10 +30,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     container = ServiceContainer(settings=settings)
     await container.start()
     app.state.container = container
+    if os.name == "nt":
+        tray = JarvisTrayIcon(
+            settings=settings,
+            event_broker=container.events,
+            memory_store=container.memory_store,
+        )
+        tray.start_in_thread(loop=asyncio.get_running_loop())
+        app.state.tray = tray
     logger.info("jarvis_api_started")
     try:
         yield
     finally:
+        tray_icon: JarvisTrayIcon | None = getattr(app.state, "tray", None)
+        if tray_icon is not None:
+            tray_icon.stop()
         await container.stop()
         logger.info("jarvis_api_stopped")
 
@@ -50,6 +64,7 @@ app.include_router(chat.router)
 app.include_router(voice.router)
 app.include_router(skills.router)
 app.include_router(memory.router)
+app.include_router(webhooks.router)
 app.include_router(websocket_router)
 
 

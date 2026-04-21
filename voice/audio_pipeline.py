@@ -10,10 +10,13 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from core.config import AppSettings
 from voice.stt import WhisperTranscriber
 from voice.tts import PiperTTSService
 from voice.vad import VoiceActivityDetector
+from voice.wake_word import WakeWordDetector
 
 
 class AudioPipeline:
@@ -33,6 +36,9 @@ class AudioPipeline:
         self._frame_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=200)
         self._input_stream: Any | None = None
         self._is_active = False
+        self._wake_word_detector = WakeWordDetector(settings=settings)
+        self._wake_word_active = False
+        self._logger = logger.bind(component="audio_pipeline")
 
     @property
     def is_active(self) -> bool:
@@ -47,11 +53,32 @@ class AudioPipeline:
             await self._open_input_stream()
 
         captured_frames: list[bytes] = []
+        frame_ms = int(
+            self._settings.voice.chunk_size * 1000 / self._settings.voice.sample_rate
+        )
+        silent_duration_ms = 0
         while self._is_active:
             frame = await self._frame_queue.get()
+            if self._settings.voice.wake_word_enabled and self._wake_word_detector.uses_porcupine:
+                if not self._wake_word_active:
+                    detected = await self._wake_word_detector.is_wake_word(frame)
+                    if detected:
+                        self._wake_word_active = True
+                        silent_duration_ms = 0
+                        self._logger.info("wake_word_detected")
+                    continue
+
             has_speech = await self._vad.detect(frame)
             if has_speech:
+                silent_duration_ms = 0
                 captured_frames.append(frame)
+                continue
+
+            if self._wake_word_active and not captured_frames:
+                silent_duration_ms += frame_ms
+                if silent_duration_ms > 5_000:
+                    self._wake_word_active = False
+                    silent_duration_ms = 0
                 continue
 
             if not captured_frames:
@@ -59,6 +86,8 @@ class AudioPipeline:
 
             audio_bytes = b"".join(captured_frames)
             captured_frames.clear()
+            if self._wake_word_active:
+                silent_duration_ms = 0
             transcript = await self._stt.transcribe(
                 _pcm_to_wav_bytes(
                     audio_bytes=audio_bytes,
@@ -70,7 +99,7 @@ class AudioPipeline:
             if not normalized_transcript:
                 continue
 
-            if self._settings.voice.wake_word_enabled:
+            if self._settings.voice.wake_word_enabled and not self._wake_word_detector.uses_porcupine:
                 wake_word = self._settings.jarvis.wake_word.lower()
                 if wake_word not in normalized_transcript.lower():
                     continue
@@ -92,6 +121,8 @@ class AudioPipeline:
             await asyncio.to_thread(self._input_stream.stop)
             await asyncio.to_thread(self._input_stream.close)
             self._input_stream = None
+        self._wake_word_detector.cleanup()
+        self._wake_word_active = False
 
     async def _open_input_stream(self) -> None:
         sd = importlib.import_module("sounddevice")

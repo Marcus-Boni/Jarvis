@@ -20,6 +20,7 @@ voice:
   channels: 1
   chunk_size: 512
   wake_word_enabled: true
+  wake_word_mode: "text"
   stt:
     model: "large-v3"
     device: "cuda"
@@ -59,6 +60,14 @@ skills:
   browser_search:
     enabled: true
     open_for_user_threshold: 0.7
+  clipboard:
+    enabled: true
+  file_manager:
+    enabled: true
+  screenshot:
+    enabled: true
+  notification:
+    enabled: true
   spotify:
     enabled: true
   notion:

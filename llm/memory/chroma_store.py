@@ -124,6 +124,14 @@ class ChromaMemoryStore:
         collection = cast(Any, self._collection)
         return cast(int, await asyncio.to_thread(collection.count))
 
+    def clear_all(self) -> None:
+        """Delete all stored memory documents."""
+
+        if self._collection is not None:
+            collection = cast(Any, self._collection)
+            collection.delete(where={"source": {"$ne": "nonexistent_placeholder"}})
+        self._fallback_store.clear_all()
+
     def _build_id(self, metadata: dict[str, Any]) -> str:
         session_id = str(metadata.get("session_id", "memory"))
         return f"{session_id}-{uuid4().hex}"
@@ -189,6 +197,10 @@ class ChromaMemoryStoreFallback:
 
     async def count(self) -> int:
         return len(self._documents)
+
+    def clear_all(self) -> None:
+        self._documents.clear()
+        self._embeddings.clear()
 
 
 def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:

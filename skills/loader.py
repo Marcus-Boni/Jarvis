@@ -13,6 +13,10 @@ from skills.productivity.calendar_skill import CalendarSkill
 from skills.productivity.notion_skill import NotionSkill
 from skills.productivity.outlook_skill import OutlookSkill
 from skills.system.app_launcher import AppLauncherSkill
+from skills.system.clipboard_skill import ClipboardSkill
+from skills.system.file_manager_skill import FileManagerSkill
+from skills.system.notification_skill import NotificationSkill
+from skills.system.screenshot_skill import ScreenshotSkill
 from skills.system.volume_skill import VolumeSkill
 
 
@@ -47,6 +51,10 @@ class SkillLoader:
                 event_broker=self._event_broker,
                 error_telemetry=self._error_telemetry,
             ),
+            ClipboardSkill(),
+            FileManagerSkill(),
+            ScreenshotSkill(),
+            NotificationSkill(),
             SpotifySkill(
                 settings=self._settings,
                 event_broker=self._event_broker,
@@ -98,6 +106,10 @@ def _is_skill_enabled(settings: AppSettings, skill_name: str) -> bool:
     settings_map = {
         "app_launcher": settings.skills.app_launcher.enabled,
         "browser_search": settings.skills.browser_search.enabled,
+        "clipboard": settings.skills.clipboard.enabled,
+        "file_manager": settings.skills.file_manager.enabled,
+        "screenshot": settings.skills.screenshot.enabled,
+        "notification": settings.skills.notification.enabled,
         "spotify": settings.skills.spotify.enabled,
         "notion": settings.skills.notion.enabled,
         "outlook": settings.skills.outlook.enabled,

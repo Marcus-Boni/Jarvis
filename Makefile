@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: start start-dev stop test lint typecheck dashboard install-models voice-test memory-clear memory-stats browser-check add-skill logs
+.PHONY: start start-dev stop test lint typecheck dashboard install-models voice-test memory-clear memory-stats browser-check tray-test wake-word-test screenshot memory-browser settings add-skill logs
 
 start:
 	@echo "[jarvis] Starting Ollama + API"
@@ -19,7 +19,7 @@ install-models:
 	bash scripts/install_models.sh
 
 voice-test:
-	$(PYTHON) -c "from voice.stt import SpeechToTextService; import asyncio; print(asyncio.run(SpeechToTextService().health_check()))"
+	$(PYTHON) -c "from core.config import AppSettings; from voice.stt import WhisperTranscriber; settings = AppSettings.load(); transcriber = WhisperTranscriber(settings); print(type(transcriber).__name__)"
 
 memory-clear:
 	@echo "[jarvis] Clearing ChromaDB"
@@ -32,6 +32,21 @@ memory-stats:
 
 browser-check:
 	$(PYTHON) -c "from skills.browser.windows_browser import get_default_browser_name, get_default_browser_path; print(f'Browser: {get_default_browser_name()}'); print(f'Path: {get_default_browser_path()}')"
+
+tray-test:
+	$(PYTHON) -c "from core.system_tray import JarvisTrayIcon; print('Tray module OK')"
+
+wake-word-test:
+	$(PYTHON) -c "from voice.wake_word import WakeWordDetector; print('Wake word module OK')"
+
+screenshot:
+	$(PYTHON) -c "from core.models import Intent, IntentCategory, RequestContext; from skills.system.screenshot_skill import ScreenshotSkill; import asyncio; skill = ScreenshotSkill(); result = asyncio.run(skill.execute(Intent(raw_text='screenshot', category=IntentCategory.SYSTEM_CONTROL), RequestContext(session_id='makefile'))); print(result.message)"
+
+memory-browser:
+	@start http://localhost:3000/memory
+
+settings:
+	@start http://localhost:3000/settings
 
 add-skill:
 	@echo "Create a new module under skills/<domain>/ and export a BaseSkill subclass."
