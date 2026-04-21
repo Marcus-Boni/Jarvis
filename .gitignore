@@ -17,4 +17,4 @@ data/logs/
 dashboard/.next/
 dashboard/node_modules/
 poetry.lock
-.omx
+/.omx
