@@ -13,6 +13,7 @@ from skills.productivity.calendar_skill import CalendarSkill
 from skills.productivity.notion_skill import NotionSkill
 from skills.productivity.outlook_skill import OutlookSkill
 from skills.system.app_launcher import AppLauncherSkill
+from skills.system.volume_skill import VolumeSkill
 
 
 class SkillLoader:
@@ -68,7 +69,9 @@ class SkillLoader:
                 event_broker=self._event_broker,
                 error_telemetry=self._error_telemetry,
             ),
+            VolumeSkill(),
         ]:
+            skill.enabled = _is_skill_enabled(settings=self._settings, skill_name=skill.name)
             self._skills[skill.name] = skill
 
     def list_enabled(self) -> list[BaseSkill]:
@@ -89,3 +92,16 @@ class SkillLoader:
             return False
         target.enabled = enabled
         return True
+
+
+def _is_skill_enabled(settings: AppSettings, skill_name: str) -> bool:
+    settings_map = {
+        "app_launcher": settings.skills.app_launcher.enabled,
+        "browser_search": settings.skills.browser_search.enabled,
+        "spotify": settings.skills.spotify.enabled,
+        "notion": settings.skills.notion.enabled,
+        "outlook": settings.skills.outlook.enabled,
+        "calendar": settings.skills.calendar.enabled,
+        "volume": settings.skills.volume.enabled,
+    }
+    return settings_map.get(skill_name, True)

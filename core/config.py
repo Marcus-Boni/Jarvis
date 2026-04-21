@@ -71,8 +71,42 @@ class MemoryConfig(BaseModel):
 
 
 class BrowserConfig(BaseModel):
+    mode: str = "system_default"
+    headless_for_scraping: bool = True
+    search_engine: str = "duckduckgo"
     max_results: int = 5
     snippet_char_limit: int = 2200
+
+
+class SkillToggleConfig(BaseModel):
+    enabled: bool = True
+
+
+class AppLauncherSkillConfig(SkillToggleConfig):
+    focus_existing: bool = True
+
+
+class BrowserSearchSkillConfig(SkillToggleConfig):
+    open_for_user_threshold: float = 0.7
+
+
+class NotionSkillSettings(SkillToggleConfig):
+    default_parent_page_id: str = ""
+
+
+class AutoMemorySkillConfig(SkillToggleConfig):
+    min_exchange_length: int = 20
+
+
+class SkillsConfig(BaseModel):
+    app_launcher: AppLauncherSkillConfig = Field(default_factory=AppLauncherSkillConfig)
+    browser_search: BrowserSearchSkillConfig = Field(default_factory=BrowserSearchSkillConfig)
+    spotify: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
+    notion: NotionSkillSettings = Field(default_factory=NotionSkillSettings)
+    outlook: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
+    calendar: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
+    volume: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
+    auto_memory: AutoMemorySkillConfig = Field(default_factory=AutoMemorySkillConfig)
 
 
 class SpotifyConfig(BaseModel):
@@ -146,6 +180,7 @@ class AppSettings(BaseModel):
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
     spotify: SpotifyConfig = Field(default_factory=SpotifyConfig)
     notion: NotionConfig = Field(default_factory=NotionConfig)
     outlook: OutlookConfig = Field(default_factory=OutlookConfig)
@@ -165,7 +200,13 @@ class AppSettings(BaseModel):
 
         yaml_payload = _read_yaml(config_path)
         env_settings = EnvironmentSecrets.model_validate(_read_env_file(env_file))
-        return cls.model_validate({**yaml_payload, "env": env_settings.model_dump()})
+        settings = cls.model_validate({**yaml_payload, "env": env_settings.model_dump()})
+        if (
+            not settings.notion.default_parent_id
+            and settings.skills.notion.default_parent_page_id
+        ):
+            settings.notion.default_parent_id = settings.skills.notion.default_parent_page_id
+        return settings
 
 
 def _read_yaml(config_path: str | Path) -> dict[str, Any]:

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import time
-
 from loguru import logger
 
+from core.intent_cache import IntentCache
 from core.models import Intent, IntentCategory
 from llm.ollama_client import OllamaClient
 from llm.prompt_manager import PromptManager
@@ -18,27 +17,31 @@ class IntentClassifier:
         self._llm_client = llm_client
         self._prompt_manager = prompt_manager
         self._logger = logger.bind(component="intent_classifier")
-        self._cache: dict[str, tuple[float, Intent]] = {}
-        self._cache_ttl_seconds = 120.0
+        self._cache = IntentCache(ttl_seconds=300.0, max_size=128)
 
     async def classify(self, text: str, locale: str = "pt-BR") -> Intent:
         """Classify a user request into an `Intent`."""
 
-        cache_key = f"{locale}:{text.strip().lower()}"
-        now = time.monotonic()
-        cached_intent = self._cache.get(cache_key)
-        if cached_intent and now - cached_intent[0] < self._cache_ttl_seconds:
-            self._logger.info("intent_cache_hit key={}", cache_key)
-            return cached_intent[1].model_copy(deep=True)
+        cached_intent = self._cache.get(text, locale)
+        if cached_intent is not None:
+            self._logger.debug("intent_cache_hit text_len={}", len(text))
+            return cached_intent
 
         rule_based_intent = _classify_with_rules(text=text, locale=locale)
         if rule_based_intent is not None:
-            self._cache[cache_key] = (now, rule_based_intent)
+            self._cache.set(text, locale, rule_based_intent)
             return rule_based_intent
 
+        intent = await self._classify_from_llm(text=text, locale=locale)
+        self._cache.set(text, locale, intent)
+        return intent
+
+    async def _classify_from_llm(self, text: str, locale: str) -> Intent:
         prompt = self._prompt_manager.build_intent_prompt(user_input=text, locale=locale)
         payload = await self._llm_client.complete_json(prompt=prompt)
-        category_value = str(payload.get("category", IntentCategory.UNKNOWN.value)).lower()
+        category_value = _normalize_category_value(
+            str(payload.get("category", IntentCategory.UNKNOWN.value)).lower()
+        )
         actions = payload.get("actions", [text])
         if not isinstance(actions, list):
             actions = [text]
@@ -58,7 +61,6 @@ class IntentClassifier:
             skill_hints=[str(item) for item in payload.get("skill_hints", [])],
             entities={str(key): str(value) for key, value in payload.get("entities", {}).items()},
         )
-        self._cache[cache_key] = (now, intent)
         self._logger.info(
             "intent_classified category={} confidence={}",
             intent.category.value,
@@ -80,8 +82,19 @@ def _classify_with_rules(text: str, locale: str) -> Intent | None:
     if any(token in lowered_text for token in ["email", "outlook", "meeting", "reuniao"]):
         return Intent(
             raw_text=text,
-            category=IntentCategory.OUTLOOK,
+            category=IntentCategory.EMAIL,
             confidence=0.8,
+            language=locale,
+            actions=[text],
+        )
+    if any(
+        token in lowered_text
+        for token in ["volume", "som", "mute", "silenc", "play", "pause", "proxima faixa"]
+    ):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.VOLUME,
+            confidence=0.82,
             language=locale,
             actions=[text],
         )
@@ -119,3 +132,8 @@ def _classify_with_rules(text: str, locale: str) -> Intent | None:
         )
     return None
 
+
+def _normalize_category_value(raw_value: str) -> str:
+    if raw_value == IntentCategory.OUTLOOK.value:
+        return IntentCategory.EMAIL.value
+    return raw_value

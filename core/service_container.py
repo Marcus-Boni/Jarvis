@@ -8,6 +8,7 @@ from core.error_telemetry import ErrorTelemetry
 from core.intent_classifier import IntentClassifier
 from core.orchestrator import Orchestrator
 from core.runtime_events import RuntimeEventBroker
+from llm.memory.auto_memory import AutoMemoryExtractor
 from llm.memory.chroma_store import ChromaMemoryStore
 from llm.memory.conversation import ConversationStore
 from llm.memory.rag_retriever import MemoryRetriever
@@ -46,6 +47,15 @@ class ServiceContainer:
             memory_store=self.memory_store,
             memory_retriever=self.memory_retriever,
         )
+        self.auto_memory = (
+            AutoMemoryExtractor(
+                llm_client=self.llm_client,
+                memory_store=self.memory_store,
+                min_exchange_length=settings.skills.auto_memory.min_exchange_length,
+            )
+            if settings.skills.auto_memory.enabled
+            else None
+        )
         self.skill_loader = SkillLoader(
             settings=settings,
             llm_client=self.llm_client,
@@ -64,6 +74,7 @@ class ServiceContainer:
             skill_loader=self.skill_loader,
             event_broker=self.events,
             error_telemetry=self.error_telemetry,
+            auto_memory=self.auto_memory,
         )
         self.vad = VoiceActivityDetector(settings=settings)
         self.stt = WhisperTranscriber(settings=settings)
@@ -79,7 +90,7 @@ class ServiceContainer:
         """Initialize runtime resources."""
 
         await self.skill_loader.load_builtin_skills()
-        await self.events.publish("runtime", {"status": "started", "phase": "phase_1"})
+        await self.events.publish("runtime", {"status": "started", "phase": "phase_2"})
 
     async def stop(self) -> None:
         """Cleanly release runtime resources."""

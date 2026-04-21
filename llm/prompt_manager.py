@@ -18,23 +18,27 @@ class PromptManager:
             "You are an intent classifier for a local AI assistant.\n"
             "Return JSON only with keys: category, confidence, language, reasoning, "
             "actions, skill_hints, entities.\n"
-            "Allowed categories: system_control, browser, notion, calendar, spotify, "
-            "outlook, conversation, code_help, memory, unknown.\n"
+            "Allowed categories: system_control, browser, notion, calendar, email, spotify, "
+            "volume, conversation, code_help, memory, unknown.\n"
             f"Locale: {locale}\n"
             f"User input: {user_input}\n"
             "Examples:\n"
             '- "abra o spotify e toque lofi" -> {"category":"spotify","confidence":0.93,'
             '"language":"pt-BR","reasoning":"music request","actions":["abrir spotify",'
             '"tocar lofi"],"skill_hints":["spotify"],"entities":{"query":"lofi"}}\n'
+            '- "aumente o volume em 15" -> {"category":"volume","confidence":0.9,'
+            '"language":"pt-BR","reasoning":"system audio request",'
+            '"actions":["aumentar volume"],"skill_hints":["volume"],'
+            '"entities":{"amount":"15"}}\n'
             '- "o que eu disse ontem sobre embedding?" -> {"category":"memory",'
             '"confidence":0.89,"language":"pt-BR","reasoning":"memory recall request",'
             '"actions":["consultar memoria"],"skill_hints":["memory"],'
             '"entities":{"topic":"embedding"}}\n'
             '- "me ajuda com um componente react" -> {"category":"code_help",'
             '"confidence":0.91,"language":"pt-BR","reasoning":"coding help",'
-            '"actions":["responder pergunta tecnica"],"skill_hints":[],'
+            '"actions":["responder pergunta tecnica"],"skill_hints":[],' 
             '"entities":{"stack":"react"}}\n'
-            '- "quais sao meus emails nao lidos?" -> {"category":"outlook",'
+            '- "quais sao meus emails nao lidos?" -> {"category":"email",'
             '"confidence":0.88,"language":"pt-BR","reasoning":"mail request",'
             '"actions":["listar emails"],"skill_hints":["outlook"],'
             '"entities":{"unread_only":"true"}}\n'
@@ -68,4 +72,3 @@ class PromptManager:
             f"Timezone: {timezone}\n"
             f"Request: {user_input}\n"
         )
-

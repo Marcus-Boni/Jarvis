@@ -40,6 +40,8 @@ rich = "^13.9.0"
 redis = "^5.2.0"
 apscheduler = "^3.10.4"
 msal = "^1.31.1"
+pycaw = "^20240210"
+comtypes = "^1.4.11"
 google-auth-oauthlib = "^1.2.1"
 sounddevice = "^0.5.1"
 pygetwindow = "^0.0.9"
@@ -75,6 +77,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+ignore = ["E501"]
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]

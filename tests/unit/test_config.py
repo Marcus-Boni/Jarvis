@@ -13,6 +13,11 @@ jarvis:
   name: "TestJarvis"
 api:
   port: 9999
+skills:
+  volume:
+    enabled: false
+  notion:
+    default_parent_page_id: "page-123"
 """.strip(),
         encoding="utf-8",
     )
@@ -24,4 +29,5 @@ api:
 
     assert settings.jarvis.name == "TestJarvis"
     assert settings.api.port == 9999
-
+    assert settings.skills.volume.enabled is False
+    assert settings.notion.default_parent_id == "page-123"

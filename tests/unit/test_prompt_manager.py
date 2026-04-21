@@ -9,7 +9,9 @@ def test_intent_prompt_contains_expected_categories() -> None:
     prompt = prompt_manager.build_intent_prompt(user_input="abra o spotify", locale="pt-BR")
 
     assert "system_control" in prompt
+    assert "email" in prompt
     assert "spotify" in prompt
+    assert "volume" in prompt
     assert "memory" in prompt
 
 
@@ -22,4 +24,3 @@ def test_fallback_prompt_contains_recent_context() -> None:
 
     assert "Jarvis" in prompt
     assert "Intent category: conversation" in prompt
-

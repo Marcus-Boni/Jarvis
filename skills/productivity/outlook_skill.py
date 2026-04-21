@@ -51,7 +51,7 @@ class OutlookSkill(BaseSkill):
 
     async def can_handle(self, intent: Intent) -> float:
         lowered_text = intent.raw_text.lower()
-        if intent.category is IntentCategory.OUTLOOK:
+        if intent.category in {IntentCategory.EMAIL, IntentCategory.OUTLOOK}:
             return 0.95
         if any(token in lowered_text for token in ["email", "outlook", "teams", "compromisso"]):
             return 0.76

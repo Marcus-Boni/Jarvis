@@ -46,8 +46,33 @@ memory:
   collection_name: "jarvis_memory"
 
 browser:
+  mode: "system_default"
+  headless_for_scraping: true
+  search_engine: "duckduckgo"
   max_results: 5
   snippet_char_limit: 2200
+
+skills:
+  app_launcher:
+    enabled: true
+    focus_existing: true
+  browser_search:
+    enabled: true
+    open_for_user_threshold: 0.7
+  spotify:
+    enabled: true
+  notion:
+    enabled: true
+    default_parent_page_id: ""
+  outlook:
+    enabled: true
+  calendar:
+    enabled: true
+  volume:
+    enabled: true
+  auto_memory:
+    enabled: true
+    min_exchange_length: 20
 
 spotify:
   token_path: "./data/spotify_token.json"

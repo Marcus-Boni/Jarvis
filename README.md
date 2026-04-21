@@ -4,26 +4,34 @@ Jarvis is a local-first personal AI assistant for a software developer. The syst
 
 ## Phase Status
 
-Phase 1 is implemented in this repository:
+### Phase 0 - Foundation
+- FastAPI, orchestrator, intent classifier, skill system
+- Dashboard Next.js (control-room aesthetic)
+- Config YAML + `.env`, testes unitarios
 
-- Central configuration via YAML + `.env`
-- Structured logging
-- Async Ollama client
-- Intent classification contracts and orchestration flow
-- Persistent ChromaDB memory with Ollama embeddings
-- Functional App Launcher, Browser Search, Spotify, Notion, Outlook, and Google Calendar skills
-- FastAPI app with chat, SSE, WebSocket, skills, memory, health, voice upload, and realtime voice websocket
-- Dashboard wired to live backend status, chat, voice, skill toggles, and activity events
-- Realtime voice pipeline services for VAD, STT, TTS, and microphone playback orchestration
-- Tests, scripts, Make targets, and architecture decisions
+### Phase 1 - Voice + Real Skills
+- Silero VAD + faster-whisper (`large-v3` CUDA) + Piper TTS
+- AudioPipeline assincrono com `sounddevice`
+- AppLauncherSkill, SpotifySkill, BrowserSearchSkill reais
+- NotionSkill, OutlookSkill (Microsoft Graph), CalendarSkill (Google)
+- Dashboard conectado ao WebSocket real
 
-Planned next phases:
+### Phase 2 - Memory + Advanced Skills
+- ChromaDB real com embeddings Ollama (`nomic-embed-text`) e fallback in-memory
+- RAG por similaridade coseno
+- `AutoMemoryExtractor` para fatos duradouros extraidos automaticamente
+- Browser padrao do Windows para handoff visivel; Playwright mantido para scraping headless
+- `VolumeSkill` com controle de audio e teclas de midia no Windows
+- `AppLauncherSkill` com foco de janela existente via Win32
+- `IntentCache` com TTL de 5 minutos e capacidade de 128 entradas
+- Skill chaining paralelo com `asyncio.gather` para intents compostas
 
-1. End-to-end runtime validation of every external integration on the target workstation
-2. Wake-word improvements beyond transcript keyword gating
-3. Hot-reloadable skill discovery and filesystem watching
-4. Deeper browser automation and richer RAG memory shaping
-5. Packaging, service management, and 24/7 idle optimization
+### Phase 3 - Planned
+- Wake word "Jarvis" via `pvporcupine`
+- File management skill
+- Clipboard skill
+- Screenshot + OCR skill
+- System tray icon
 
 ## Repository Layout
 
@@ -69,7 +77,6 @@ make dashboard
 ## Configuration
 
 - General runtime settings: `config/jarvis.yaml`
-- Skill flags: `config/skills.yaml`
 - Model registry: `config/models.yaml`
 - Secrets and local overrides: `.env`
 
@@ -89,7 +96,5 @@ make dashboard
 
 ## Notes
 
-- Backend verification in this session: `pytest`, `ruff`, and `mypy` all pass.
-- Frontend verification in this session: `pnpm exec tsc --noEmit` passes.
-- `next build` failed in this environment with `spawn EPERM`, so production Next build output was not verified here.
+- Backend verification in this session: pending fresh Phase 2 validation after the new changes.
 - External runtime integrations still depend on local credentials, models, binaries, audio devices, and provider consent flows being present on the target machine.

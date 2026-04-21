@@ -1,11 +1,11 @@
-"""Windows application launcher with best-effort window focus."""
+"""Windows app launcher with real window focus support."""
 
 from __future__ import annotations
 
 import asyncio
 import importlib
 import os
-import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, ClassVar
@@ -15,36 +15,58 @@ from core.error_telemetry import ErrorTelemetry
 from core.models import Intent, IntentCategory, RequestContext, SkillResult
 from core.runtime_events import RuntimeEventBroker
 from skills.base_skill import BaseSkill
+from skills.browser.windows_browser import get_default_browser_path, open_url_in_default_browser
+
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+_USERNAME = os.environ.get("USERNAME", "User")
 
 APP_MAP: dict[str, list[str]] = {
-    "vscode": [r"C:\Users\{username}\AppData\Local\Programs\Microsoft VS Code\Code.exe"],
-    "spotify": [r"C:\Users\{username}\AppData\Roaming\Spotify\Spotify.exe"],
+    "vscode": [rf"C:\Users\{_USERNAME}\AppData\Local\Programs\Microsoft VS Code\Code.exe"],
+    "code": [rf"C:\Users\{_USERNAME}\AppData\Local\Programs\Microsoft VS Code\Code.exe"],
+    "spotify": [rf"C:\Users\{_USERNAME}\AppData\Roaming\Spotify\Spotify.exe"],
     "chrome": [r"C:\Program Files\Google\Chrome\Application\chrome.exe"],
     "firefox": [r"C:\Program Files\Mozilla Firefox\firefox.exe"],
-    "notion": ["notion.exe"],
+    "edge": [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"],
     "terminal": ["wt.exe"],
+    "powershell": ["powershell.exe"],
     "explorer": ["explorer.exe"],
     "discord": [
-        r"C:\Users\{username}\AppData\Local\Discord\Update.exe",
+        rf"C:\Users\{_USERNAME}\AppData\Local\Discord\Update.exe",
         "--processStart",
         "Discord.exe",
     ],
-    "postman": ["postman.exe"],
-    "figma": ["figma.exe"],
+    "notion": [rf"C:\Users\{_USERNAME}\AppData\Local\Programs\Notion\Notion.exe"],
+    "postman": [rf"C:\Users\{_USERNAME}\AppData\Local\Postman\Postman.exe"],
+    "figma": [rf"C:\Users\{_USERNAME}\AppData\Local\Figma\Figma.exe"],
+    "slack": [rf"C:\Users\{_USERNAME}\AppData\Local\slack\slack.exe"],
+    "teams": [rf"C:\Users\{_USERNAME}\AppData\Local\Microsoft\Teams\current\Teams.exe"],
+    "outlook": ["outlook.exe"],
+    "word": ["winword.exe"],
+    "excel": ["excel.exe"],
+    "notepad": ["notepad.exe"],
+    "calculator": ["calc.exe"],
+    "paint": ["mspaint.exe"],
+}
+
+APP_ALIASES: dict[str, str] = {
+    "visual studio code": "vscode",
+    "vs code": "vscode",
+    "navegador": "browser",
+    "browser": "browser",
+    "spotify": "spotify",
+    "discord": "discord",
+    "terminal": "terminal",
+    "calculadora": "calculator",
+    "bloco de notas": "notepad",
 }
 
 
 class AppLauncherSkill(BaseSkill):
-    """Open or focus common Windows applications."""
+    """Open Windows apps or focus the existing window when possible."""
 
     name: ClassVar[str] = "app_launcher"
-    description: ClassVar[str] = "Open desktop applications and focus running windows."
-    triggers: ClassVar[list[str]] = [
-        "abra o chrome",
-        "abre o spotify",
-        "open vscode",
-        "launch discord",
-    ]
+    description: ClassVar[str] = "Abre aplicativos no Windows e foca a janela se ja estiver aberta."
+    triggers: ClassVar[list[str]] = list(APP_MAP.keys()) + list(APP_ALIASES.keys())
 
     def __init__(
         self,
@@ -57,37 +79,36 @@ class AppLauncherSkill(BaseSkill):
         self._event_broker = event_broker
         self._error_telemetry = error_telemetry
 
+    def _resolve_app_name(self, raw_text: str) -> str | None:
+        lowered_text = raw_text.lower()
+        for alias, canonical_name in APP_ALIASES.items():
+            if alias in lowered_text:
+                return canonical_name
+        for app_name in APP_MAP:
+            if app_name in lowered_text:
+                return app_name
+        return None
+
     async def can_handle(self, intent: Intent) -> float:
-        lowered_text = intent.raw_text.lower()
         if intent.category is IntentCategory.SYSTEM_CONTROL:
-            return 0.92
-        if any(verb in lowered_text for verb in ["abra", "abre", "open", "launch"]):
-            if any(app_name in lowered_text for app_name in APP_MAP):
-                return 0.8
+            app_name = self._resolve_app_name(intent.raw_text)
+            return 0.95 if app_name else 0.72
+        if any("abr" in action.lower() or "open" in action.lower() for action in intent.actions):
+            return 0.65
         return 0.0
 
     async def execute(self, intent: Intent, context: RequestContext) -> SkillResult:
-        if os.name != "nt":
+        del context
+        app_key = intent.entities.get("app") or self._resolve_app_name(intent.raw_text)
+        if not app_key:
             return SkillResult(
                 skill_name=self.name,
                 success=False,
-                message="App launcher is implemented for Windows only in this phase.",
-            )
-
-        app_name = _extract_app_name(intent=intent)
-        if app_name is None:
-            return SkillResult(
-                skill_name=self.name,
-                success=False,
-                message="I could not determine which application should be opened.",
+                message="Nao reconheci qual aplicativo voce quer abrir.",
             )
 
         try:
-            result = await asyncio.to_thread(
-                self._open_or_focus_app,
-                app_name,
-                intent.raw_text,
-            )
+            result = await asyncio.to_thread(self._open_or_focus_app, app_key.lower())
             await self._event_broker.publish(
                 "activity",
                 {"component": self.name, "message": result.message},
@@ -98,141 +119,116 @@ class AppLauncherSkill(BaseSkill):
                 component=self.name,
                 error=type(exc).__name__,
                 message=str(exc),
-                metadata={"app_name": app_name},
+                metadata={"app_name": app_key},
             )
             return SkillResult(
                 skill_name=self.name,
                 success=False,
-                message=f"Failed to open {app_name}. The error was logged safely.",
+                message=f"Erro ao abrir {app_key}. O erro foi registrado.",
             )
 
-    def _open_or_focus_app(self, app_name: str, utterance: str) -> SkillResult:
-        running_process = _find_running_process(app_name)
-        if running_process is not None:
-            did_focus = _focus_window(process_id=running_process.pid, app_name=app_name)
-            focus_message = "and focused it" if did_focus else "but could not focus its window"
+    def _open_or_focus_app(self, app_key: str) -> SkillResult:
+        if app_key == "browser":
+            opened = open_url_in_default_browser("about:blank")
             return SkillResult(
                 skill_name=self.name,
-                success=True,
-                message=f"{app_name} is already running {focus_message}.",
-                data={"app_name": app_name, "pid": running_process.pid, "action": "focus"},
+                success=opened,
+                message=(
+                    "Browser padrao aberto."
+                    if opened
+                    else "Nao consegui abrir o browser padrao."
+                ),
+                data={"action": "launched", "app": "browser", "exe": get_default_browser_path()},
             )
 
-        command = _resolve_command(app_name)
+        command = _resolve_command(app_key)
         if command is None:
             return SkillResult(
                 skill_name=self.name,
                 success=False,
-                message=f"No executable mapping is configured for {app_name}.",
+                message=f"Aplicativo '{app_key}' nao esta configurado ou nao foi encontrado.",
             )
 
-        extra_args = _extract_launch_arguments(app_name=app_name, utterance=utterance)
-        launch_command = [*command, *extra_args]
-        working_directory = extra_args[0] if extra_args and Path(extra_args[0]).exists() else None
-        subprocess.Popen(
-            launch_command,
-            cwd=working_directory,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-        )
+        process_name = _process_name_from_command(command[0])
+        should_focus_existing = self._settings.skills.app_launcher.focus_existing
+        if should_focus_existing and process_name:
+            existing_process = _find_running_process(process_name)
+            if existing_process is not None and _focus_window(process_name):
+                return SkillResult(
+                    skill_name=self.name,
+                    success=True,
+                    message=f"{app_key.title()} ja estava aberto e a janela foi focada.",
+                    data={"action": "focused", "app": app_key},
+                )
+
+        subprocess.Popen(command, creationflags=_CREATE_NO_WINDOW)
         return SkillResult(
             skill_name=self.name,
             success=True,
-            message=f"Opened {app_name}.",
-            data={"app_name": app_name, "command": launch_command},
+            message=f"{app_key.title()} aberto com sucesso.",
+            data={"action": "launched", "app": app_key, "command": command},
         )
 
 
-def _extract_app_name(intent: Intent) -> str | None:
-    entity_app = intent.entities.get("app")
-    if entity_app and entity_app in APP_MAP:
-        return entity_app
-
-    lowered_text = intent.raw_text.lower()
-    for app_name in APP_MAP:
-        if app_name in lowered_text:
-            return app_name
-    return None
-
-
-def _resolve_command(app_name: str) -> list[str] | None:
-    template_parts = APP_MAP.get(app_name)
-    if template_parts is None:
+def _resolve_command(app_key: str) -> list[str] | None:
+    command = APP_MAP.get(app_key)
+    if command is None:
         return None
 
-    username = os.environ.get("USERNAME", "")
-    resolved_parts = [
-        os.path.expandvars(part.format(username=username)) for part in template_parts
-    ]
-    executable_path = resolved_parts[0]
-    if Path(executable_path).exists() or not executable_path.lower().endswith(".exe"):
-        return resolved_parts
+    executable = command[0]
+    if Path(executable).exists() or shutil.which(executable):
+        return command
     return None
+
+
+def _process_name_from_command(executable: str) -> str:
+    return Path(executable).stem.lower().removesuffix(".exe")
 
 
 def _find_running_process(app_name: str) -> Any | None:
-    psutil = importlib.import_module("psutil")
-    aliases = {app_name}
-    if app_name == "vscode":
-        aliases.add("code")
-    if app_name == "terminal":
-        aliases.add("windowsterminal")
+    """Find a running process matching the application name."""
 
-    for process in psutil.process_iter(["name"]):
-        process_name = (process.info.get("name") or "").lower().removesuffix(".exe")
-        if process_name in aliases:
-            return process
+    psutil: Any = importlib.import_module("psutil")
+    target_name = app_name.lower()
+    for process in psutil.process_iter(["name", "exe"]):
+        try:
+            process_name = str(process.info.get("name") or "").lower().removesuffix(".exe")
+            process_executable = str(process.info.get("exe") or "").lower()
+            if target_name == process_name or target_name in process_executable:
+                return process
+        except Exception:
+            continue
     return None
 
 
-def _focus_window(process_id: int, app_name: str) -> bool:
-    try:
-        gw = importlib.import_module("pygetwindow")
+def _focus_window(process_name: str) -> bool:
+    """Bring an application's main window to the foreground via Win32."""
 
-        for title in gw.getAllTitles():
-            lowered_title = title.lower()
-            if not title.strip():
-                continue
-            if app_name in lowered_title or (
-                app_name == "vscode" and "visual studio code" in lowered_title
-            ):
-                for window in gw.getWindowsWithTitle(title):
-                    window.activate()
-                    return True
-    except Exception:
-        pass
+    psutil: Any = importlib.import_module("psutil")
+    win32con: Any = importlib.import_module("win32con")
+    win32gui: Any = importlib.import_module("win32gui")
+    win32process: Any = importlib.import_module("win32process")
 
-    try:
-        win32con = importlib.import_module("win32con")
-        win32gui = importlib.import_module("win32gui")
-        win32process = importlib.import_module("win32process")
+    hwnd_list: list[int] = []
 
-        focused = False
+    def enum_callback(hwnd: int, _: object) -> bool:
+        if not win32gui.IsWindowVisible(hwnd):
+            return True
+        _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+        try:
+            process = psutil.Process(process_id)
+            current_name = process.name().lower().removesuffix(".exe")
+            if process_name.lower() in current_name:
+                hwnd_list.append(hwnd)
+        except Exception:
+            return True
+        return True
 
-        def callback(window_handle: int, _: Any) -> None:
-            nonlocal focused
-            _, target_process_id = win32process.GetWindowThreadProcessId(window_handle)
-            if target_process_id != process_id or not win32gui.IsWindowVisible(window_handle):
-                return
-            win32gui.ShowWindow(window_handle, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(window_handle)
-            focused = True
-
-        win32gui.EnumWindows(callback, None)
-        return focused
-    except Exception:
+    win32gui.EnumWindows(enum_callback, None)
+    if not hwnd_list:
         return False
 
-
-def _extract_launch_arguments(app_name: str, utterance: str) -> list[str]:
-    if app_name != "vscode":
-        return []
-
-    match = re.search(r"(?:no projeto|na pasta|in project)\s+(.+)$", utterance, re.IGNORECASE)
-    if match is None:
-        return []
-
-    raw_path = match.group(1).strip().strip("\"'")
-    candidate_path = Path(raw_path).expanduser()
-    if candidate_path.exists():
-        return [str(candidate_path)]
-    return []
+    hwnd = hwnd_list[0]
+    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+    win32gui.SetForegroundWindow(hwnd)
+    return True

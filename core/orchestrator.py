@@ -17,6 +17,7 @@ from core.protocols import (
     SkillLoaderProtocol,
 )
 from core.runtime_events import RuntimeEventBroker
+from llm.memory.auto_memory import AutoMemoryExtractor
 from skills.base_skill import BaseSkill
 
 
@@ -32,6 +33,7 @@ class Orchestrator:
         skill_loader: SkillLoaderProtocol,
         event_broker: RuntimeEventBroker,
         error_telemetry: ErrorTelemetry,
+        auto_memory: AutoMemoryExtractor | None = None,
     ) -> None:
         self._classifier = classifier
         self._context_manager = context_manager
@@ -40,6 +42,7 @@ class Orchestrator:
         self._skill_loader = skill_loader
         self._event_broker = event_broker
         self._error_telemetry = error_telemetry
+        self._auto_memory = auto_memory
         self._logger = logger.bind(component="orchestrator")
 
     async def handle_message(
@@ -70,6 +73,11 @@ class Orchestrator:
             user_message=message,
             assistant_message=response_text,
             locale=locale,
+        )
+        self._schedule_auto_memory(
+            session_id=session_id,
+            user_message=message,
+            assistant_message=response_text,
         )
         await self._event_broker.publish(
             "chat",
@@ -109,36 +117,37 @@ class Orchestrator:
             yield chunk
 
     async def _execute_skills(self, intent: Intent, context: RequestContext) -> list[SkillResult]:
-        """Select and execute the best matching skills for an intent."""
+        """Select and execute matching skills, in parallel for compound intents."""
+
+        enabled_skills = self._skill_loader.list_enabled()
+        if not enabled_skills:
+            return []
 
         candidate_scores: list[tuple[BaseSkill, float]] = []
-        for skill in self._skill_loader.list_enabled():
-            score = await skill.can_handle(intent)
-            if score >= 0.55:
-                candidate_scores.append((skill, score))
+        score_tasks = [skill.can_handle(intent) for skill in enabled_skills]
+        scores = await asyncio.gather(*score_tasks, return_exceptions=True)
+
+        for skill, score in zip(enabled_skills, scores, strict=True):
+            if isinstance(score, BaseException):
+                self._logger.warning("skill_can_handle_failed skill={} error={}", skill.name, score)
+                continue
+            score_value = float(score)
+            if score_value >= 0.55:
+                candidate_scores.append((skill, score_value))
 
         if not candidate_scores:
             return []
 
-        ordered_candidates = sorted(
-            candidate_scores,
-            key=lambda item: item[1],
-            reverse=True,
-        )
-        selected_skills = [ordered_candidates[0][0]]
+        ordered_candidates = sorted(candidate_scores, key=lambda item: item[1], reverse=True)
         if intent.is_compound:
-            selected_skills = [skill for skill, score in ordered_candidates[:3] if score >= 0.6]
+            selected_skills = [skill for skill, _ in ordered_candidates[:2]]
+        else:
+            selected_skills = [ordered_candidates[0][0]]
 
-        return await asyncio.gather(
-            *(
-                self._execute_one_skill(
-                    skill=skill,
-                    intent=intent,
-                    context=context,
-                )
-                for skill in selected_skills
-            )
+        results = await asyncio.gather(
+            *(self._safe_execute_skill(skill=skill, intent=intent, context=context) for skill in selected_skills)
         )
+        return [result for result in results if result is not None]
 
     async def _respond_with_fallback_llm(self, intent: Intent, context: RequestContext) -> str:
         """Generate a direct assistant response when no skill handles the request."""
@@ -146,12 +155,12 @@ class Orchestrator:
         prompt = self._prompt_manager.build_fallback_prompt(intent=intent, context=context)
         return await self._llm_client.complete_text(prompt=prompt)
 
-    async def _execute_one_skill(
+    async def _safe_execute_skill(
         self,
         skill: BaseSkill,
         intent: Intent,
         context: RequestContext,
-    ) -> SkillResult:
+    ) -> SkillResult | None:
         try:
             result = await skill.execute(intent=intent, context=context)
             await self._event_broker.publish(
@@ -160,7 +169,7 @@ class Orchestrator:
             )
             return result
         except Exception as exc:  # pragma: no cover
-            self._logger.exception("skill_execution_failed skill={} error={}", skill.name, exc)
+            self._logger.exception("skill_failed skill={} error={}", skill.name, exc)
             await self._error_telemetry.record(
                 component=skill.name,
                 error=type(exc).__name__,
@@ -169,11 +178,32 @@ class Orchestrator:
             return SkillResult(
                 skill_name=skill.name,
                 success=False,
-                message=(
-                    f"The skill {skill.name} failed safely and the error was "
-                    "recorded for analysis."
-                ),
+                message=f"Skill {skill.name} falhou com seguranca: {type(exc).__name__}",
             )
+
+    def _schedule_auto_memory(
+        self,
+        session_id: str,
+        user_message: str,
+        assistant_message: str,
+    ) -> None:
+        if self._auto_memory is None:
+            return
+
+        task = asyncio.create_task(
+            self._auto_memory.extract_and_store(
+                session_id=session_id,
+                user_message=user_message,
+                assistant_message=assistant_message,
+            )
+        )
+        task.add_done_callback(self._handle_background_task_completion)
+
+    def _handle_background_task_completion(self, task: asyncio.Task[int]) -> None:
+        try:
+            task.result()
+        except Exception as exc:  # pragma: no cover
+            self._logger.warning("background_task_failed error={}", exc)
 
 
 def _chunk_response(text: str, chunk_size: int = 72) -> list[str]:

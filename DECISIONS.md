@@ -126,3 +126,51 @@ Why:
 - Local playback via sounddevice works directly with PCM.
 - Browsers and Web Audio tooling expect a decodable container for remote playback.
 - This keeps one TTS source with two delivery formats.
+
+## ADR-011: Visible browser handoff must respect the Windows default browser
+
+- Date: 2026-04-21
+- Status: accepted
+
+When Jarvis needs to open a page for the user to see, it now delegates that handoff to the Windows default browser instead of Playwright's bundled Chromium.
+
+Why:
+- The assistant should match the user's configured browser workflow instead of forcing an internal runtime choice.
+- Playwright Chromium remains useful for scraping and form automation, but it is the wrong UX surface for visible navigation.
+- Separating visible browsing from internal automation keeps both paths simpler to reason about.
+
+Tradeoff:
+- Registry detection is Windows-specific and needs a graceful fallback path.
+- There are now two browser execution modes to maintain.
+
+## ADR-012: Intent classification uses a small TTL cache
+
+- Date: 2026-04-21
+- Status: accepted
+
+Intent results are cached in-memory for five minutes with bounded capacity and oldest-entry eviction.
+
+Why:
+- Repeated voice retries and dashboard resends often replay identical utterances.
+- Avoiding redundant LLM classification removes unnecessary latency from the hot path.
+- A small bounded cache gives the speedup without introducing durable correctness risk.
+
+Tradeoff:
+- Very recent classifier improvements do not apply to already cached inputs until expiry.
+- Capacity is intentionally small, so low-value entries may be evicted quickly under bursty usage.
+
+## ADR-013: Compound intents execute the top matching skills in parallel
+
+- Date: 2026-04-21
+- Status: accepted
+
+For compound intents, Jarvis now scores candidate skills concurrently and executes the top matches in parallel with isolated failure handling.
+
+Why:
+- Multi-action requests should not pay unnecessary serial latency when the chosen skills are independent.
+- Parallel score evaluation is a direct latency win because `can_handle()` calls may already depend on async I/O or model hints.
+- Failure isolation keeps one broken skill from collapsing the whole request.
+
+Tradeoff:
+- Concurrent skill execution increases pressure on shared local resources.
+- Results must stay independent enough to avoid ordering assumptions between skills.
