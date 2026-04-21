@@ -2,24 +2,73 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
+from core.config import AppSettings
+from core.error_telemetry import ErrorTelemetry
+from core.runtime_events import RuntimeEventBroker
+from llm.ollama_client import OllamaClient
 from skills.base_skill import BaseSkill
 from skills.browser.search import BrowserSearchSkill
 from skills.media.spotify_skill import SpotifySkill
+from skills.productivity.calendar_skill import CalendarSkill
+from skills.productivity.notion_skill import NotionSkill
+from skills.productivity.outlook_skill import OutlookSkill
 from skills.system.app_launcher import AppLauncherSkill
 
 
 class SkillLoader:
-    """Manages builtin and future hot-reloaded Jarvis skills."""
+    """Manage builtin and future hot-reloaded Jarvis skills."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        settings: AppSettings,
+        llm_client: OllamaClient,
+        event_broker: RuntimeEventBroker,
+        error_telemetry: ErrorTelemetry,
+    ) -> None:
+        self._settings = settings
+        self._llm_client = llm_client
+        self._event_broker = event_broker
+        self._error_telemetry = error_telemetry
         self._skills: dict[str, BaseSkill] = {}
 
     async def load_builtin_skills(self) -> None:
         """Instantiate builtin skills."""
 
-        for skill in [AppLauncherSkill(), BrowserSearchSkill(), SpotifySkill()]:
+        for skill in [
+            AppLauncherSkill(
+                settings=self._settings,
+                event_broker=self._event_broker,
+                error_telemetry=self._error_telemetry,
+            ),
+            BrowserSearchSkill(
+                settings=self._settings,
+                llm_client=self._llm_client,
+                event_broker=self._event_broker,
+                error_telemetry=self._error_telemetry,
+            ),
+            SpotifySkill(
+                settings=self._settings,
+                event_broker=self._event_broker,
+                error_telemetry=self._error_telemetry,
+            ),
+            NotionSkill(
+                settings=self._settings,
+                event_broker=self._event_broker,
+                error_telemetry=self._error_telemetry,
+            ),
+            OutlookSkill(
+                settings=self._settings,
+                llm_client=self._llm_client,
+                event_broker=self._event_broker,
+                error_telemetry=self._error_telemetry,
+            ),
+            CalendarSkill(
+                settings=self._settings,
+                llm_client=self._llm_client,
+                event_broker=self._event_broker,
+                error_telemetry=self._error_telemetry,
+            ),
+        ]:
             self._skills[skill.name] = skill
 
     def list_enabled(self) -> list[BaseSkill]:
@@ -40,4 +89,3 @@ class SkillLoader:
             return False
         target.enabled = enabled
         return True
-

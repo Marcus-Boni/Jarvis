@@ -63,3 +63,66 @@ Why:
 - The UI needs to feel like a control room, not a marketing site.
 - Warm/cool accent pairing helps separate action, observability, and status states.
 
+## ADR-006: Persistent semantic memory with ChromaDB
+
+- Date: 2026-04-20
+- Status: accepted
+
+Phase 1 replaces the in-process memory placeholder with ChromaDB backed by Ollama embeddings.
+
+Why:
+- Conversation history now survives restarts.
+- Every exchange can become retrievable context for later tasks.
+- The same memory substrate supports explicit recall and passive personalization.
+
+Tradeoff:
+- More moving parts in local setup.
+- Embedding on write adds latency, so writes stay small and async.
+
+## ADR-007: Lazy imports for heavy local integrations
+
+- Date: 2026-04-20
+- Status: accepted
+
+Optional integrations such as Torch, sounddevice, MSAL, Google auth, and desktop window control are imported lazily at runtime instead of module import time.
+
+Why:
+- API startup should stay healthy even when one provider stack is missing.
+- Tests and static analysis stay fast and deterministic.
+- Setup failures degrade gracefully to per-skill errors instead of whole-app crashes.
+
+## ADR-008: Spotify auth prefers PKCE when no client secret exists
+
+- Date: 2026-04-20
+- Status: accepted
+
+Jarvis uses Spotify OAuth with a desktop-friendly fallback to PKCE when no client secret is configured.
+
+Why:
+- Desktop/local assistants should not require a stored client secret.
+- PKCE still gives refreshable user tokens.
+- This keeps the integration usable in local-only setups.
+
+## ADR-009: Dashboard treats WebSockets as the live source of truth
+
+- Date: 2026-04-20
+- Status: accepted
+
+The dashboard now uses `/ws/chat`, `/ws/voice`, and `/ws/events` for live interaction and activity telemetry, while REST remains the control/config surface.
+
+Why:
+- Chat and voice benefit from incremental updates instead of polling.
+- Activity logs and status transitions should appear immediately.
+- REST alone would make the assistant feel laggy and indirect.
+
+## ADR-010: Voice pipeline uses raw PCM internally and WAV at browser boundaries
+
+- Date: 2026-04-20
+- Status: accepted
+
+Piper audio stays raw PCM inside the Python voice pipeline for low-overhead playback, but HTTP/WebSocket responses wrap that PCM in WAV for browser compatibility.
+
+Why:
+- Local playback via sounddevice works directly with PCM.
+- Browsers and Web Audio tooling expect a decodable container for remote playback.
+- This keeps one TTS source with two delivery formats.

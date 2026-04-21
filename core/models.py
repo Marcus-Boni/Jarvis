@@ -16,6 +16,7 @@ class IntentCategory(str, Enum):
     NOTION = "notion"
     CALENDAR = "calendar"
     SPOTIFY = "spotify"
+    OUTLOOK = "outlook"
     CONVERSATION = "conversation"
     CODE_HELP = "code_help"
     MEMORY = "memory"
@@ -63,6 +64,8 @@ class RequestContext(BaseModel):
     session_id: str
     user_id: str = "local-user"
     locale: str = "pt-BR"
+    timezone: str = "America/Sao_Paulo"
+    trace_id: str = ""
     messages: list[ConversationMessage] = Field(default_factory=list)
     memory_documents: list[ContextDocument] = Field(default_factory=list)
     preferences: dict[str, Any] = Field(default_factory=dict)
@@ -86,4 +89,3 @@ class OrchestratorResponse(BaseModel):
     response_text: str
     skill_results: list[SkillResult] = Field(default_factory=list)
     used_fallback_llm: bool = False
-

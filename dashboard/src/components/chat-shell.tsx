@@ -1,12 +1,31 @@
 "use client";
 
-import { ArrowUpRight, LoaderCircle, Mic, Sparkles } from "lucide-react";
+import { ArrowUpRight, LoaderCircle, Sparkles } from "lucide-react";
 
-import { useJarvisStream } from "@/hooks/use-jarvis-stream";
+import type { ChatMessage } from "@/hooks/use-jarvis-stream";
+import { VoiceButton } from "@/components/voice-button";
 
-export function ChatShell() {
-  const { deferredDraft, draft, isPending, messages, sendMessage, setDraft } = useJarvisStream();
+type ChatShellProps = {
+  connectionStatus: "connecting" | "connected" | "disconnected";
+  draft: string;
+  isPending: boolean;
+  messages: ChatMessage[];
+  onSend: () => Promise<void>;
+  setDraft: (draft: string) => void;
+  voiceState: "idle" | "listening" | "processing" | "speaking";
+  onVoiceToggle: () => void | Promise<void>;
+};
 
+export function ChatShell({
+  connectionStatus,
+  draft,
+  isPending,
+  messages,
+  onSend,
+  onVoiceToggle,
+  setDraft,
+  voiceState,
+}: ChatShellProps) {
   return (
     <section className="panel chat-shell">
       <div className="panel-header">
@@ -14,17 +33,17 @@ export function ChatShell() {
           <span className="eyebrow">Primary Workspace</span>
           <h2>Command Conversation</h2>
         </div>
-        <div className="status-chip online">
+        <div className={`status-chip ${connectionStatus === "connected" ? "online" : "idle"}`}>
           <Sparkles size={14} />
-          <span>Local-first routing</span>
+          <span>{connectionStatus}</span>
         </div>
       </div>
 
       <div className="message-stack" aria-live="polite">
         {messages.map((message) => (
           <article key={message.id} className={`message-bubble ${message.role}`}>
-            <span className="message-role">{message.role === "assistant" ? "Jarvis" : "Você"}</span>
-            <p>{message.content}</p>
+            <span className="message-role">{message.role === "assistant" ? "Jarvis" : "You"}</span>
+            <p>{message.content || (isPending && message.role === "assistant" ? "..." : "")}</p>
           </article>
         ))}
       </div>
@@ -36,20 +55,17 @@ export function ChatShell() {
             name="jarvis-command"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="Descreva uma tarefa, pergunte algo técnico ou simule um comando local."
+            placeholder="Describe a task, ask a technical question, or launch a local action."
             rows={4}
           />
           <span className="composer-hint">
-            Draft ativo: {deferredDraft.length} caracteres.
+            Live backend websocket + realtime voice pipeline.
           </span>
         </label>
 
         <div className="composer-actions">
-          <button className="ghost-button" type="button" aria-label="Ativar modo voz">
-            <Mic size={16} />
-            <span>Voice</span>
-          </button>
-          <button className="primary-button" type="button" onClick={() => void sendMessage()}>
+          <VoiceButton onClick={onVoiceToggle} state={voiceState} />
+          <button className="primary-button" type="button" onClick={() => void onSend()}>
             {isPending ? <LoaderCircle className="spin" size={16} /> : <ArrowUpRight size={16} />}
             <span>{isPending ? "Responding" : "Send"}</span>
           </button>

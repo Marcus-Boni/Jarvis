@@ -67,7 +67,13 @@ async def attach_trace_id(
 
 
 @app.get("/health")
-async def healthcheck() -> dict[str, str]:
-    """Basic liveness endpoint."""
+async def healthcheck(request: Request) -> dict[str, object]:
+    """Return runtime health and integration readiness."""
 
-    return {"status": "ok"}
+    container: ServiceContainer = request.app.state.container
+    return {
+        "status": "ok",
+        "voice_active": container.audio_pipeline.is_active,
+        "ollama_reachable": await container.llm_client.health(),
+        "loaded_skills": [skill.name for skill in container.skill_loader.list_all()],
+    }

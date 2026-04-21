@@ -85,8 +85,20 @@ class OllamaClient:
             return False
         return True
 
+    async def complete_json_safe(
+        self,
+        prompt: str,
+        fallback: dict[str, Any],
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        """Return JSON and fall back to a caller-provided payload on failure."""
+
+        try:
+            return await self.complete_json(prompt=prompt, model=model)
+        except (httpx.HTTPError, json.JSONDecodeError):
+            return fallback
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
 
         await self._client.aclose()
-

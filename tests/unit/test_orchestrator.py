@@ -1,7 +1,12 @@
 from __future__ import annotations
 
-from core.models import Intent, IntentCategory, OrchestratorResponse, RequestContext, SkillResult
+from typing import ClassVar
+
+from core.error_telemetry import ErrorTelemetry
+from core.models import Intent, IntentCategory, RequestContext, SkillResult
 from core.orchestrator import Orchestrator
+from core.runtime_events import RuntimeEventBroker
+from skills.base_skill import BaseSkill
 
 
 class FakeClassifier:
@@ -19,52 +24,80 @@ class FakeContextManager:
     def __init__(self) -> None:
         self.persisted: list[tuple[str, str, str]] = []
 
-    async def build_context(self, session_id: str, prompt: str, locale: str = "pt-BR") -> RequestContext:
+    async def build_context(
+        self,
+        session_id: str,
+        prompt: str,
+        locale: str = "pt-BR",
+    ) -> RequestContext:
+        del prompt
         return RequestContext(session_id=session_id, locale=locale)
 
-    async def persist_exchange(self, session_id: str, user_message: str, assistant_message: str) -> None:
+    async def persist_exchange(
+        self,
+        session_id: str,
+        user_message: str,
+        assistant_message: str,
+        locale: str = "pt-BR",
+    ) -> None:
+        del locale
         self.persisted.append((session_id, user_message, assistant_message))
 
 
 class FakeLlmClient:
-    async def complete_text(self, prompt: str) -> str:
+    async def complete_text(self, prompt: str, model: str | None = None) -> str:
+        del prompt, model
         return "fallback response"
 
 
 class FakePromptManager:
     def build_fallback_prompt(self, intent: Intent, context: RequestContext) -> str:
+        del intent, context
         return "fallback prompt"
 
 
 class FakeSkillLoader:
-    def __init__(self, skills: list[object]) -> None:
+    def __init__(self, skills: list[BaseSkill]) -> None:
         self._skills = skills
 
-    def list_enabled(self) -> list[object]:
+    def list_enabled(self) -> list[BaseSkill]:
         return self._skills
 
 
-class HelpfulSkill:
-    name = "helpful"
+class HelpfulSkill(BaseSkill):
+    name: ClassVar[str] = "helpful"
+    description: ClassVar[str] = "helpful test skill"
+    triggers: ClassVar[list[str]] = ["help"]
 
     async def can_handle(self, intent: Intent) -> float:
+        del intent
         return 0.91
 
     async def execute(self, intent: Intent, context: RequestContext) -> SkillResult:
+        del intent, context
         return SkillResult(skill_name="helpful", success=True, message="skill response")
 
 
-async def test_orchestrator_uses_fallback_when_no_skill_matches() -> None:
-    context_manager = FakeContextManager()
-    orchestrator = Orchestrator(
+def _build_orchestrator(
+    context_manager: FakeContextManager,
+    skills: list[BaseSkill],
+) -> Orchestrator:
+    return Orchestrator(
         classifier=FakeClassifier(),
         context_manager=context_manager,
         llm_client=FakeLlmClient(),
         prompt_manager=FakePromptManager(),
-        skill_loader=FakeSkillLoader(skills=[]),
+        skill_loader=FakeSkillLoader(skills=skills),
+        event_broker=RuntimeEventBroker(),
+        error_telemetry=ErrorTelemetry("data/logs/test-errors.jsonl"),
     )
 
-    response = await orchestrator.handle_message(session_id="s1", message="olá")
+
+async def test_orchestrator_uses_fallback_when_no_skill_matches() -> None:
+    context_manager = FakeContextManager()
+    orchestrator = _build_orchestrator(context_manager=context_manager, skills=[])
+
+    response = await orchestrator.handle_message(session_id="s1", message="ola")
 
     assert response.response_text == "fallback response"
     assert response.used_fallback_llm is True
@@ -73,17 +106,13 @@ async def test_orchestrator_uses_fallback_when_no_skill_matches() -> None:
 
 async def test_orchestrator_executes_matching_skill() -> None:
     context_manager = FakeContextManager()
-    orchestrator = Orchestrator(
-        classifier=FakeClassifier(),
+    orchestrator = _build_orchestrator(
         context_manager=context_manager,
-        llm_client=FakeLlmClient(),
-        prompt_manager=FakePromptManager(),
-        skill_loader=FakeSkillLoader(skills=[HelpfulSkill()]),
+        skills=[HelpfulSkill()],
     )
 
-    response = await orchestrator.handle_message(session_id="s1", message="olá")
+    response = await orchestrator.handle_message(session_id="s1", message="ola")
 
     assert response.response_text == "skill response"
     assert response.used_fallback_llm is False
     assert response.skill_results[0].skill_name == "helpful"
-

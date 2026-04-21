@@ -10,5 +10,7 @@ def test_healthcheck() -> None:
         response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert "ollama_reachable" in payload
+    assert "loaded_skills" in payload

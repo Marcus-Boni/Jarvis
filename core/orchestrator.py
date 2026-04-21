@@ -2,41 +2,59 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 
 from loguru import logger
 
-from core.context_manager import ContextManager
-from core.intent_classifier import IntentClassifier
+from core.error_telemetry import ErrorTelemetry
 from core.models import Intent, OrchestratorResponse, RequestContext, SkillResult
-from llm.ollama_client import OllamaClient
-from llm.prompt_manager import PromptManager
+from core.protocols import (
+    ContextManagerProtocol,
+    IntentClassifierProtocol,
+    LlmClientProtocol,
+    PromptManagerProtocol,
+    SkillLoaderProtocol,
+)
+from core.runtime_events import RuntimeEventBroker
 from skills.base_skill import BaseSkill
-from skills.loader import SkillLoader
 
 
 class Orchestrator:
-    """Routes user requests to skills or fallback LLM responses."""
+    """Route user requests to skills or fallback LLM responses."""
 
     def __init__(
         self,
-        classifier: IntentClassifier,
-        context_manager: ContextManager,
-        llm_client: OllamaClient,
-        prompt_manager: PromptManager,
-        skill_loader: SkillLoader,
+        classifier: IntentClassifierProtocol,
+        context_manager: ContextManagerProtocol,
+        llm_client: LlmClientProtocol,
+        prompt_manager: PromptManagerProtocol,
+        skill_loader: SkillLoaderProtocol,
+        event_broker: RuntimeEventBroker,
+        error_telemetry: ErrorTelemetry,
     ) -> None:
         self._classifier = classifier
         self._context_manager = context_manager
         self._llm_client = llm_client
         self._prompt_manager = prompt_manager
         self._skill_loader = skill_loader
+        self._event_broker = event_broker
+        self._error_telemetry = error_telemetry
         self._logger = logger.bind(component="orchestrator")
 
-    async def handle_message(self, session_id: str, message: str, locale: str = "pt-BR") -> OrchestratorResponse:
+    async def handle_message(
+        self,
+        session_id: str,
+        message: str,
+        locale: str = "pt-BR",
+    ) -> OrchestratorResponse:
         """Process a user message end-to-end."""
 
-        context = await self._context_manager.build_context(session_id=session_id, prompt=message, locale=locale)
+        context = await self._context_manager.build_context(
+            session_id=session_id,
+            prompt=message,
+            locale=locale,
+        )
         intent = await self._classifier.classify(text=message, locale=locale)
         skill_results = await self._execute_skills(intent=intent, context=context)
 
@@ -51,6 +69,15 @@ class Orchestrator:
             session_id=session_id,
             user_message=message,
             assistant_message=response_text,
+            locale=locale,
+        )
+        await self._event_broker.publish(
+            "chat",
+            {
+                "session_id": session_id,
+                "intent": intent.category.value,
+                "used_fallback_llm": used_fallback_llm,
+            },
         )
         self._logger.info(
             "message_handled category={} used_fallback={} skill_count={}",
@@ -65,10 +92,19 @@ class Orchestrator:
             used_fallback_llm=used_fallback_llm,
         )
 
-    async def stream_response(self, session_id: str, message: str, locale: str = "pt-BR") -> AsyncIterator[str]:
+    async def stream_response(
+        self,
+        session_id: str,
+        message: str,
+        locale: str = "pt-BR",
+    ) -> AsyncIterator[str]:
         """Yield a response in small chunks suitable for SSE/WebSocket streaming."""
 
-        response = await self.handle_message(session_id=session_id, message=message, locale=locale)
+        response = await self.handle_message(
+            session_id=session_id,
+            message=message,
+            locale=locale,
+        )
         for chunk in _chunk_response(response.response_text):
             yield chunk
 
@@ -84,31 +120,60 @@ class Orchestrator:
         if not candidate_scores:
             return []
 
-        ordered_candidates = sorted(candidate_scores, key=lambda item: item[1], reverse=True)
+        ordered_candidates = sorted(
+            candidate_scores,
+            key=lambda item: item[1],
+            reverse=True,
+        )
         selected_skills = [ordered_candidates[0][0]]
-        if intent.is_compound and len(ordered_candidates) > 1:
-            selected_skills.append(ordered_candidates[1][0])
+        if intent.is_compound:
+            selected_skills = [skill for skill, score in ordered_candidates[:3] if score >= 0.6]
 
-        results: list[SkillResult] = []
-        for skill in selected_skills:
-            try:
-                results.append(await skill.execute(intent=intent, context=context))
-            except Exception as exc:  # pragma: no cover - defensive runtime guard
-                self._logger.exception("skill_execution_failed skill={} error={}", skill.name, exc)
-                results.append(
-                    SkillResult(
-                        skill_name=skill.name,
-                        success=False,
-                        message=f"A skill {skill.name} falhou de forma segura e foi registrada para análise.",
-                    )
+        return await asyncio.gather(
+            *(
+                self._execute_one_skill(
+                    skill=skill,
+                    intent=intent,
+                    context=context,
                 )
-        return results
+                for skill in selected_skills
+            )
+        )
 
     async def _respond_with_fallback_llm(self, intent: Intent, context: RequestContext) -> str:
         """Generate a direct assistant response when no skill handles the request."""
 
         prompt = self._prompt_manager.build_fallback_prompt(intent=intent, context=context)
         return await self._llm_client.complete_text(prompt=prompt)
+
+    async def _execute_one_skill(
+        self,
+        skill: BaseSkill,
+        intent: Intent,
+        context: RequestContext,
+    ) -> SkillResult:
+        try:
+            result = await skill.execute(intent=intent, context=context)
+            await self._event_broker.publish(
+                "skill",
+                {"skill_name": skill.name, "success": result.success},
+            )
+            return result
+        except Exception as exc:  # pragma: no cover
+            self._logger.exception("skill_execution_failed skill={} error={}", skill.name, exc)
+            await self._error_telemetry.record(
+                component=skill.name,
+                error=type(exc).__name__,
+                message=str(exc),
+            )
+            return SkillResult(
+                skill_name=skill.name,
+                success=False,
+                message=(
+                    f"The skill {skill.name} failed safely and the error was "
+                    "recorded for analysis."
+                ),
+            )
 
 
 def _chunk_response(text: str, chunk_size: int = 72) -> list[str]:
@@ -127,4 +192,3 @@ def _chunk_response(text: str, chunk_size: int = 72) -> list[str]:
     if current_chunk:
         chunks.append(current_chunk)
     return chunks
-

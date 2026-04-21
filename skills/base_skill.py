@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
 from core.models import Intent, RequestContext, SkillResult
 
@@ -10,9 +11,9 @@ from core.models import Intent, RequestContext, SkillResult
 class BaseSkill(ABC):
     """Base class implemented by every Jarvis skill."""
 
-    name: str
-    description: str
-    triggers: list[str]
+    name: ClassVar[str]
+    description: ClassVar[str]
+    triggers: ClassVar[list[str]]
     enabled: bool
 
     def __init__(self) -> None:
@@ -35,4 +36,3 @@ class BaseSkill(ABC):
             "triggers": self.triggers,
             "enabled": self.enabled,
         }
-

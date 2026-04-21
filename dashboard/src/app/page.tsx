@@ -1,24 +1,129 @@
-import { Activity, BrainCircuit, DatabaseZap, Gauge, RadioTower, ShieldCheck } from "lucide-react";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  BrainCircuit,
+  DatabaseZap,
+  Gauge,
+  RadioTower,
+  ShieldCheck,
+} from "lucide-react";
 
 import { ChatShell } from "@/components/chat-shell";
 import { StatusCard } from "@/components/status-card";
-import { activityItems, skillItems, statusCards } from "@/lib/demo-data";
+import { useJarvisEvents } from "@/hooks/use-jarvis-events";
+import { useJarvisStream } from "@/hooks/use-jarvis-stream";
+import { useJarvisVoice } from "@/hooks/use-jarvis-voice";
+
+type StatusTone = "success" | "warning" | "info" | "default";
+
+type SkillStatus = {
+  description: string;
+  enabled: boolean;
+  name: string;
+  triggers: string[];
+};
+
+type HealthPayload = {
+  loaded_skills: string[];
+  ollama_reachable: boolean;
+  status: string;
+  voice_active: boolean;
+};
 
 const telemetry = [
-  { icon: BrainCircuit, label: "Intent Engine", value: "Active", detail: "Zero-shot + structured JSON" },
-  { icon: DatabaseZap, label: "Memory Layer", value: "Staged", detail: "Conversation store + retriever interface" },
-  { icon: RadioTower, label: "Voice Loop", value: "Pending", detail: "VAD, STT and TTS land in Phase 1" },
-  { icon: ShieldCheck, label: "Safety", value: "Guarded", detail: "No destructive OS actions without explicit flow" },
+  { icon: BrainCircuit, label: "Intent Engine", detail: "Zero-shot + cached routing" },
+  { icon: DatabaseZap, label: "Memory Layer", detail: "ChromaDB + conversation recall" },
+  { icon: RadioTower, label: "Voice Loop", detail: "Mic capture, STT, TTS, websocket voice" },
+  { icon: ShieldCheck, label: "Safety", detail: "Errors logged and destructive actions guarded" },
 ];
 
 export default function HomePage() {
+  const {
+    appendAssistantChunk,
+    appendUserMessage,
+    completeAssistantMessage,
+    connectionStatus,
+    draft,
+    isPending,
+    messages,
+    sendMessage,
+    setDraft,
+  } = useJarvisStream();
+  const { events } = useJarvisEvents();
+  const { toggleListening, voiceConnectionStatus, voiceState } = useJarvisVoice({
+    onAssistantChunk: appendAssistantChunk,
+    onAssistantDone: completeAssistantMessage,
+    onTranscript: appendUserMessage,
+  });
+  const [health, setHealth] = useState<HealthPayload | null>(null);
+  const [skills, setSkills] = useState<SkillStatus[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const [healthResponse, skillsResponse] = await Promise.all([
+        fetch("http://localhost:8000/health"),
+        fetch("http://localhost:8000/api/skills"),
+      ]);
+      const nextHealth = (await healthResponse.json()) as HealthPayload;
+      const nextSkills = (await skillsResponse.json()) as { items: SkillStatus[] };
+      setHealth(nextHealth);
+      setSkills(nextSkills.items);
+    };
+    void loadData();
+  }, []);
+
+  const statusCards = useMemo(
+    () => [
+      {
+        label: "Model",
+        value: health?.ollama_reachable ? "Reachable" : "Offline",
+        detail: health?.ollama_reachable ? "Ollama responded to health check" : "Backend cannot reach Ollama",
+        tone: (health?.ollama_reachable ? "success" : "warning") as StatusTone,
+      },
+      {
+        label: "Memory",
+        value: "ChromaDB",
+        detail: "Persistent vector memory is active in Phase 1.",
+        tone: "info" as StatusTone,
+      },
+      {
+        label: "Voice",
+        value: voiceState,
+        detail: `Voice socket ${voiceConnectionStatus}.`,
+        tone: (voiceState === "idle" ? "default" : "success") as StatusTone,
+      },
+      {
+        label: "Skills",
+        value: `${skills.filter((skill) => skill.enabled).length}`,
+        detail: "Builtin skills loaded from the backend registry.",
+        tone: "default" as StatusTone,
+      },
+    ],
+    [health?.ollama_reachable, skills, voiceConnectionStatus, voiceState]
+  );
+
+  const toggleSkill = async (skillName: string, enabled: boolean) => {
+    await fetch(`http://localhost:8000/api/skills/${skillName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !enabled }),
+    });
+    setSkills((currentSkills) =>
+      currentSkills.map((skill) =>
+        skill.name === skillName ? { ...skill, enabled: !enabled } : skill
+      )
+    );
+  };
+
   return (
     <main className="app-shell">
       <aside className="left-rail panel">
         <div className="rail-header">
           <span className="eyebrow">Jarvis</span>
           <h1>Local Control Room</h1>
-          <p>Assistente pessoal local para voz, automação, contexto e execução segura.</p>
+          <p>Voice, memory, local models, productivity integrations, and safe execution.</p>
         </div>
 
         <nav className="rail-nav" aria-label="Primary">
@@ -39,34 +144,34 @@ export default function HomePage() {
         <section className="rail-meter">
           <div>
             <span className="eyebrow">Runtime</span>
-            <strong>Phase 0 online</strong>
+            <strong>{health?.status === "ok" ? "Phase 1 online" : "Checking backend"}</strong>
           </div>
           <div className="meter-track" aria-hidden="true">
             <span className="meter-fill" />
           </div>
-          <p>Core, API e dashboard base estão prontos para a próxima rodada de integrações.</p>
+          <p>Text chat, voice websocket, skills, and Chroma memory are wired to the live backend.</p>
         </section>
       </aside>
 
       <section className="workspace" id="workspace">
         <header className="hero panel">
           <div>
-            <span className="eyebrow">Foundation Build</span>
-            <h2>FastAPI, orchestration, memory scaffolding and dashboard shell</h2>
+            <span className="eyebrow">Realtime Build</span>
+            <h2>Voice, Chroma memory, external skills, and dashboard live wiring</h2>
           </div>
           <div className="hero-metrics">
             <div className="metric-tile">
               <Gauge size={18} />
               <div>
-                <span>Latency Strategy</span>
-                <strong>Async-first I/O</strong>
+                <span>Chat Socket</span>
+                <strong>{connectionStatus}</strong>
               </div>
             </div>
             <div className="metric-tile">
               <Activity size={18} />
               <div>
-                <span>Current Phase</span>
-                <strong>Foundation</strong>
+                <span>Voice State</span>
+                <strong>{voiceState}</strong>
               </div>
             </div>
           </div>
@@ -78,14 +183,23 @@ export default function HomePage() {
           ))}
         </section>
 
-        <ChatShell />
+        <ChatShell
+          connectionStatus={connectionStatus}
+          draft={draft}
+          isPending={isPending}
+          messages={messages}
+          onSend={sendMessage}
+          onVoiceToggle={toggleListening}
+          setDraft={setDraft}
+          voiceState={voiceState}
+        />
 
         <section className="telemetry-grid">
           {telemetry.map((item) => (
             <article key={item.label} className="panel telemetry-card">
               <item.icon size={18} />
               <span className="eyebrow">{item.label}</span>
-              <strong>{item.value}</strong>
+              <strong>{item.label}</strong>
               <p>{item.detail}</p>
             </article>
           ))}
@@ -101,11 +215,17 @@ export default function HomePage() {
             </div>
           </div>
           <div className="stack-list">
-            {skillItems.map((skill) => (
+            {skills.map((skill) => (
               <article key={skill.name} className="list-card">
                 <div className="list-row">
                   <strong>{skill.name}</strong>
-                  <span className="status-chip idle">{skill.state}</span>
+                  <button
+                    className={`status-chip ${skill.enabled ? "online" : "idle"}`}
+                    type="button"
+                    onClick={() => void toggleSkill(skill.name, skill.enabled)}
+                  >
+                    {skill.enabled ? "enabled" : "disabled"}
+                  </button>
                 </div>
                 <p>{skill.description}</p>
               </article>
@@ -121,8 +241,10 @@ export default function HomePage() {
             </div>
           </div>
           <ol className="timeline">
-            {activityItems.map((item) => (
-              <li key={item}>{item}</li>
+            {events.map((event) => (
+              <li key={`${event.timestamp}-${event.type}`}>
+                <strong>{event.type}</strong>: {JSON.stringify(event.payload)}
+              </li>
             ))}
           </ol>
         </section>
@@ -135,8 +257,8 @@ export default function HomePage() {
               <strong>mistral-nemo:12b</strong>
             </div>
             <div className="config-item">
-              <span>Fallback</span>
-              <strong>phi3:mini</strong>
+              <span>Voice Socket</span>
+              <strong>{voiceConnectionStatus}</strong>
             </div>
             <div className="config-item">
               <span>Locale</span>
@@ -152,4 +274,3 @@ export default function HomePage() {
     </main>
   );
 }
-

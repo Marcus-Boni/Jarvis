@@ -1,28 +1,29 @@
 # Jarvis
 
-Jarvis is a local-first personal AI assistant for a software developer. The system is being built in phases around a modular Python backend, a Next.js dashboard, and local model/runtime integrations such as Ollama, ChromaDB, Playwright, Whisper, and Piper.
+Jarvis is a local-first personal AI assistant for a software developer. The system is being built in phases around a modular Python backend, a Next.js dashboard, and local model/runtime integrations such as Ollama, ChromaDB, Playwright, Whisper, Piper, Spotify, Notion, Google Calendar, and Outlook.
 
 ## Phase Status
 
-Phase 0 is implemented in this repository:
+Phase 1 is implemented in this repository:
 
 - Central configuration via YAML + `.env`
 - Structured logging
 - Async Ollama client
 - Intent classification contracts and orchestration flow
-- Skill registry and initial skill scaffolds
-- FastAPI app with chat, SSE, WebSocket, skills, memory, voice placeholder, and health endpoints
-- Dashboard foundation with a control-room UI language
+- Persistent ChromaDB memory with Ollama embeddings
+- Functional App Launcher, Browser Search, Spotify, Notion, Outlook, and Google Calendar skills
+- FastAPI app with chat, SSE, WebSocket, skills, memory, health, voice upload, and realtime voice websocket
+- Dashboard wired to live backend status, chat, voice, skill toggles, and activity events
+- Realtime voice pipeline services for VAD, STT, TTS, and microphone playback orchestration
 - Tests, scripts, Make targets, and architecture decisions
 
 Planned next phases:
 
-1. Voice pipeline
-2. Essential skills
-3. Productivity integrations
-4. Persistent memory and RAG
-5. API hardening and dashboard real-time wiring
-6. Polish, verification, and operational docs
+1. End-to-end runtime validation of every external integration on the target workstation
+2. Wake-word improvements beyond transcript keyword gating
+3. Hot-reloadable skill discovery and filesystem watching
+4. Deeper browser automation and richer RAG memory shaping
+5. Packaging, service management, and 24/7 idle optimization
 
 ## Repository Layout
 
@@ -78,14 +79,17 @@ make dashboard
 - `POST /api/chat`
 - `POST /api/chat/stream`
 - `POST /api/voice/stream`
+- `GET /api/voice/status`
 - `GET /api/skills`
 - `POST /api/skills/{skill_name}`
 - `POST /api/memory/query`
 - `WS /ws/chat`
+- `WS /ws/voice`
+- `WS /ws/events`
 
 ## Notes
 
-- The current workspace shell does not expose a usable Python interpreter, so the Python test and typecheck commands have not been executed in this session.
-- The dashboard is scaffolded but dependencies are not installed automatically.
-- Runtime integrations like Spotify OAuth, Notion, Calendar, ChromaDB, Whisper, Piper, and Playwright still require their Phase 1-5 implementations.
-
+- Backend verification in this session: `pytest`, `ruff`, and `mypy` all pass.
+- Frontend verification in this session: `pnpm exec tsc --noEmit` passes.
+- `next build` failed in this environment with `spawn EPERM`, so production Next build output was not verified here.
+- External runtime integrations still depend on local credentials, models, binaries, audio devices, and provider consent flows being present on the target machine.

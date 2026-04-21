@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,7 @@ from api.dependencies import get_container, require_local_token
 from core.service_container import ServiceContainer
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+ContainerDependency = Annotated[ServiceContainer, Depends(get_container)]
 
 
 class ChatRequest(BaseModel):
@@ -31,7 +33,7 @@ class ChatResponse(BaseModel):
 @router.post("", response_model=ChatResponse, dependencies=[Depends(require_local_token)])
 async def create_chat_response(
     payload: ChatRequest,
-    container: ServiceContainer = Depends(get_container),
+    container: ContainerDependency,
 ) -> ChatResponse:
     """Return a single-shot chat response."""
 
@@ -51,7 +53,7 @@ async def create_chat_response(
 @router.post("/stream", dependencies=[Depends(require_local_token)])
 async def stream_chat_response(
     payload: ChatRequest,
-    container: ServiceContainer = Depends(get_container),
+    container: ContainerDependency,
 ) -> StreamingResponse:
     """Stream chat chunks over SSE."""
 
@@ -65,4 +67,3 @@ async def stream_chat_response(
         yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
-

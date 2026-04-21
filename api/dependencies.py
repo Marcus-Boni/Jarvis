@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import Header, HTTPException, Request, status
 
 from core.service_container import ServiceContainer
@@ -10,7 +12,7 @@ from core.service_container import ServiceContainer
 def get_container(request: Request) -> ServiceContainer:
     """Return the shared service container from application state."""
 
-    return request.app.state.container
+    return cast(ServiceContainer, request.app.state.container)
 
 
 def require_local_token(
@@ -28,4 +30,3 @@ def require_local_token(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Missing or invalid local auth token.",
     )
-

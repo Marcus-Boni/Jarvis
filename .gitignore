@@ -10,6 +10,8 @@ build/
 node_modules/
 .next/
 .turbo/
+.tsbuildinfo
+*.tsbuildinfo
 .env
 data/chroma/
 data/conversations/

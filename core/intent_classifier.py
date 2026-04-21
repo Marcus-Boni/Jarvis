@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from loguru import logger
 
 from core.models import Intent, IntentCategory
@@ -10,15 +12,29 @@ from llm.prompt_manager import PromptManager
 
 
 class IntentClassifier:
-    """Classifies text into a normalized Jarvis intent."""
+    """Classify text into a normalized Jarvis intent."""
 
     def __init__(self, llm_client: OllamaClient, prompt_manager: PromptManager) -> None:
         self._llm_client = llm_client
         self._prompt_manager = prompt_manager
         self._logger = logger.bind(component="intent_classifier")
+        self._cache: dict[str, tuple[float, Intent]] = {}
+        self._cache_ttl_seconds = 120.0
 
     async def classify(self, text: str, locale: str = "pt-BR") -> Intent:
         """Classify a user request into an `Intent`."""
+
+        cache_key = f"{locale}:{text.strip().lower()}"
+        now = time.monotonic()
+        cached_intent = self._cache.get(cache_key)
+        if cached_intent and now - cached_intent[0] < self._cache_ttl_seconds:
+            self._logger.info("intent_cache_hit key={}", cache_key)
+            return cached_intent[1].model_copy(deep=True)
+
+        rule_based_intent = _classify_with_rules(text=text, locale=locale)
+        if rule_based_intent is not None:
+            self._cache[cache_key] = (now, rule_based_intent)
+            return rule_based_intent
 
         prompt = self._prompt_manager.build_intent_prompt(user_input=text, locale=locale)
         payload = await self._llm_client.complete_json(prompt=prompt)
@@ -42,6 +58,64 @@ class IntentClassifier:
             skill_hints=[str(item) for item in payload.get("skill_hints", [])],
             entities={str(key): str(value) for key, value in payload.get("entities", {}).items()},
         )
-        self._logger.info("intent_classified category={} confidence={}", intent.category.value, intent.confidence)
+        self._cache[cache_key] = (now, intent)
+        self._logger.info(
+            "intent_classified category={} confidence={}",
+            intent.category.value,
+            intent.confidence,
+        )
         return intent
+
+
+def _classify_with_rules(text: str, locale: str) -> Intent | None:
+    lowered_text = text.lower().strip()
+    if any(token in lowered_text for token in ["spotify", "pause", "pausa", "proxima", "next"]):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.SPOTIFY,
+            confidence=0.86,
+            language=locale,
+            actions=[text],
+        )
+    if any(token in lowered_text for token in ["email", "outlook", "meeting", "reuniao"]):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.OUTLOOK,
+            confidence=0.8,
+            language=locale,
+            actions=[text],
+        )
+    if any(token in lowered_text for token in ["google calendar", "evento", "agenda"]):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.CALENDAR,
+            confidence=0.78,
+            language=locale,
+            actions=[text],
+        )
+    if any(token in lowered_text for token in ["notion", "anote", "nota"]):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.NOTION,
+            confidence=0.82,
+            language=locale,
+            actions=[text],
+        )
+    if any(token in lowered_text for token in ["abra ", "abre ", "open ", "launch "]):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.SYSTEM_CONTROL,
+            confidence=0.79,
+            language=locale,
+            actions=[text],
+        )
+    if any(token in lowered_text for token in ["pesquise", "procure", "search", "busque"]):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.BROWSER,
+            confidence=0.76,
+            language=locale,
+            actions=[text],
+        )
+    return None
 
