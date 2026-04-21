@@ -1,0 +1,46 @@
+"""Prompt builders for intent classification and fallback chat."""
+
+from __future__ import annotations
+
+from core.models import Intent, RequestContext
+
+
+class PromptManager:
+    """Owns structured prompt templates used across the system."""
+
+    def __init__(self, jarvis_name: str) -> None:
+        self._jarvis_name = jarvis_name
+
+    def build_intent_prompt(self, user_input: str, locale: str) -> str:
+        """Return a prompt that instructs the LLM to classify intent as JSON."""
+
+        return (
+            "You are an intent classifier for a local AI assistant.\n"
+            "Return JSON only with keys: category, confidence, language, reasoning, actions, skill_hints, entities.\n"
+            "Allowed categories: system_control, browser, notion, calendar, spotify, conversation, code_help, memory, unknown.\n"
+            f"Locale: {locale}\n"
+            f"User input: {user_input}\n"
+            "Examples:\n"
+            '- "abra o spotify e toque lofi" -> {"category":"spotify","confidence":0.93,"language":"pt-BR","reasoning":"music request","actions":["abrir spotify","tocar lofi"],"skill_hints":["spotify"],"entities":{"query":"lofi"}}\n'
+            '- "o que eu disse ontem sobre embedding?" -> {"category":"memory","confidence":0.89,"language":"pt-BR","reasoning":"memory recall request","actions":["consultar memória"],"skill_hints":["memory"],"entities":{"topic":"embedding"}}\n'
+            '- "me ajuda com um componente react" -> {"category":"code_help","confidence":0.91,"language":"pt-BR","reasoning":"coding help","actions":["responder pergunta técnica"],"skill_hints":[],"entities":{"stack":"react"}}\n'
+        )
+
+    def build_fallback_prompt(self, intent: Intent, context: RequestContext) -> str:
+        """Return a context-aware fallback prompt for direct LLM responses."""
+
+        transcript = "\n".join(
+            f"{message.role}: {message.content}" for message in context.messages[-6:]
+        ) or "no previous conversation"
+        memory = "\n".join(document.content for document in context.memory_documents) or "no memory"
+        return (
+            f"You are {self._jarvis_name}, a local-first personal AI assistant.\n"
+            f"Respond in {context.locale} unless the user clearly asks otherwise.\n"
+            "Be concise, safe, and practical.\n"
+            f"Intent category: {intent.category.value}\n"
+            f"Recent transcript:\n{transcript}\n"
+            f"Relevant memory:\n{memory}\n"
+            f"User preferences: {context.preferences}\n"
+            f"Latest user request: {intent.raw_text}\n"
+        )
+

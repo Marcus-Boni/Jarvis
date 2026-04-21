@@ -1,0 +1,48 @@
+jarvis:
+  name: "Jarvis"
+  language: "pt-BR"
+  wake_word: "jarvis"
+  timezone: "America/Sao_Paulo"
+
+llm:
+  provider: "ollama"
+  model: "mistral-nemo:12b-instruct-2407-q4_K_M"
+  fallback_model: "phi3:mini"
+  base_url: "http://localhost:11434"
+  context_window: 8192
+  temperature: 0.4
+  stream: true
+  request_timeout_seconds: 90.0
+
+voice:
+  enabled: false
+  stt:
+    model: "large-v3"
+    device: "cuda"
+    compute_type: "float16"
+    language: "pt"
+  tts:
+    model: "pt_BR-faber-medium"
+    speed: 1.0
+  vad:
+    threshold: 0.5
+    min_silence_ms: 500
+
+memory:
+  provider: "chromadb"
+  persist_directory: "./data/chroma"
+  conversations_directory: "./data/conversations"
+  embedding_model: "nomic-embed-text"
+  max_context_docs: 5
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: false
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+
+dashboard:
+  origin: "http://localhost:3000"
+

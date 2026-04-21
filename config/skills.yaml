@@ -1,0 +1,8 @@
+skills:
+  app_launcher:
+    enabled: true
+  browser_search:
+    enabled: true
+  spotify:
+    enabled: true
+

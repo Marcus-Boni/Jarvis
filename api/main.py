@@ -1,0 +1,73 @@
+"""FastAPI application entrypoint for Jarvis."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+
+from api.routes import chat, memory, skills, voice
+from api.websocket.handler import websocket_router
+from core.config import AppSettings
+from core.logging import configure_logging, get_logger
+from core.service_container import ServiceContainer
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialize and tear down runtime services."""
+
+    configure_logging()
+    logger = get_logger(component="api")
+    settings = AppSettings.load()
+    container = ServiceContainer(settings=settings)
+    await container.start()
+    app.state.container = container
+    logger.info("jarvis_api_started")
+    try:
+        yield
+    finally:
+        await container.stop()
+        logger.info("jarvis_api_stopped")
+
+
+app = FastAPI(title="Jarvis API", version="0.1.0", lifespan=lifespan)
+
+settings_for_cors = AppSettings.load()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings_for_cors.api.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(chat.router)
+app.include_router(voice.router)
+app.include_router(skills.router)
+app.include_router(memory.router)
+app.include_router(websocket_router)
+
+
+@app.middleware("http")
+async def attach_trace_id(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    """Attach a trace identifier to every request for cross-cutting logs."""
+
+    request.state.trace_id = request.headers.get("x-trace-id", str(uuid4()))
+    response = await call_next(request)
+    response.headers["x-trace-id"] = request.state.trace_id
+    return response
+
+
+@app.get("/health")
+async def healthcheck() -> dict[str, str]:
+    """Basic liveness endpoint."""
+
+    return {"status": "ok"}

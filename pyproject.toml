@@ -1,0 +1,74 @@
+[tool.poetry]
+name = "jarvis"
+version = "0.1.0"
+description = "Local-first personal AI assistant"
+authors = ["Marcus Boni <marcus@example.com>"]
+readme = "README.md"
+packages = [
+  { include = "api" },
+  { include = "core" },
+  { include = "llm" },
+  { include = "skills" },
+  { include = "voice" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.0"
+uvicorn = { version = "^0.32.0", extras = ["standard"] }
+pydantic = "^2.9.0"
+pydantic-settings = "^2.6.0"
+httpx = "^0.27.0"
+pyyaml = "^6.0.2"
+loguru = "^0.7.2"
+orjson = "^3.10.0"
+langchain = "^0.3.0"
+langchain-community = "^0.3.0"
+langchain-ollama = "^0.2.0"
+chromadb = "^0.5.0"
+faster-whisper = "^1.0.0"
+playwright = "^1.48.0"
+spotipy = "^2.24.0"
+notion-client = "^2.2.1"
+google-auth = "^2.35.0"
+google-api-python-client = "^2.149.0"
+duckduckgo-search = "^6.3.0"
+pynput = "^1.7.7"
+psutil = "^6.1.0"
+pyperclip = "^1.9.0"
+rich = "^13.9.0"
+redis = "^5.2.0"
+apscheduler = "^3.10.4"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+pytest-cov = "^5.0.0"
+mypy = "^1.12.0"
+ruff = "^0.7.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+disallow_any_generics = true
+plugins = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+

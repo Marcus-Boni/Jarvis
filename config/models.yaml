@@ -1,0 +1,11 @@
+models:
+  primary:
+    name: "mistral-nemo:12b-instruct-2407-q4_K_M"
+    use_case: "general_reasoning"
+  fallback:
+    name: "phi3:mini"
+    use_case: "lightweight_tasks"
+  embeddings:
+    name: "nomic-embed-text"
+    use_case: "memory_retrieval"
+
