@@ -4,19 +4,19 @@ Jarvis is a local-first personal AI assistant for a software developer. The syst
 
 ## Phase Status
 
-### Phase 0 - Foundation
+### Phase 0 - Foundation ✅
 - FastAPI, orchestrator, intent classifier, skill system
 - Dashboard Next.js (control-room aesthetic)
 - Config YAML + `.env`, testes unitarios
 
-### Phase 1 - Voice + Real Skills
+### Phase 1 - Voice + Real Skills ✅
 - Silero VAD + faster-whisper (`large-v3` CUDA) + Piper TTS
 - AudioPipeline assincrono com `sounddevice`
 - AppLauncherSkill, SpotifySkill, BrowserSearchSkill reais
 - NotionSkill, OutlookSkill (Microsoft Graph), CalendarSkill (Google)
 - Dashboard conectado ao WebSocket real
 
-### Phase 2 - Memory + Advanced Skills
+### Phase 2 - Memory + Advanced Skills ✅
 - ChromaDB real com embeddings Ollama (`nomic-embed-text`) e fallback in-memory
 - RAG por similaridade coseno
 - `AutoMemoryExtractor` para fatos duradouros extraidos automaticamente
@@ -26,7 +26,7 @@ Jarvis is a local-first personal AI assistant for a software developer. The syst
 - `IntentCache` com TTL de 5 minutos e capacidade de 128 entradas
 - Skill chaining paralelo com `asyncio.gather` para intents compostas
 
-### Phase 3 - System Integration
+### Phase 3 - System Integration ✅
 - Wake word "Jarvis" via `pvporcupine` with transcript fallback
 - System Tray com icone procedural, menu rapido, e quit seguro
 - `ClipboardSkill`: leitura e escrita na area de transferencia
