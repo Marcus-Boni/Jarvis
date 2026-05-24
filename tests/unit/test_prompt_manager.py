@@ -24,3 +24,4 @@ def test_fallback_prompt_contains_recent_context() -> None:
 
     assert "Jarvis" in prompt
     assert "Intent category: conversation" in prompt
+    assert "Current local date/time:" in prompt

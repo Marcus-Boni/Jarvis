@@ -8,10 +8,12 @@ import json
 import wave
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from loguru import logger
 
 from core.service_container import ServiceContainer
 
 websocket_router = APIRouter()
+socket_logger = logger.bind(component="websocket")
 
 
 @websocket_router.websocket("/ws/chat")
@@ -26,14 +28,27 @@ async def chat_socket(websocket: WebSocket) -> None:
             session_id = str(payload.get("session_id", "default-session"))
             message = str(payload.get("message", ""))
             locale = str(payload.get("locale", "pt-BR"))
-
-            async for chunk in container.orchestrator.stream_response(
-                session_id=session_id,
-                message=message,
-                locale=locale,
-            ):
-                await websocket.send_json({"type": "chunk", "text": chunk})
-            await websocket.send_json({"type": "done"})
+            try:
+                response = await container.orchestrator.handle_message(
+                    session_id=session_id,
+                    message=message,
+                    locale=locale,
+                )
+                for chunk in _chunk_response(response.response_text):
+                    await websocket.send_json({"type": "chunk", "text": chunk})
+                await websocket.send_json({"type": "done", "text": response.response_text})
+            except Exception as exc:  # pragma: no cover
+                socket_logger.warning("chat_socket_failed error={}", exc)
+                await container.error_telemetry.record(
+                    component="ws_chat",
+                    error=type(exc).__name__,
+                    message=str(exc),
+                )
+                error_text = (
+                    "Nao consegui responder agora. Tente novamente em alguns segundos."
+                )
+                await websocket.send_json({"type": "error", "text": error_text})
+                await websocket.send_json({"type": "done", "text": error_text})
     except WebSocketDisconnect:
         return
 
@@ -65,6 +80,8 @@ async def voice_socket(websocket: WebSocket) -> None:
     try:
         while True:
             message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                return
             if "bytes" in message and message["bytes"] is not None:
                 buffer.extend(message["bytes"])
                 continue
@@ -87,9 +104,30 @@ async def voice_socket(websocket: WebSocket) -> None:
                 continue
 
             transcript = await container.stt.transcribe(bytes(buffer))
+            normalized_transcript = transcript.strip()
+            if not normalized_transcript:
+                fallback_text = "Nao consegui entender o audio. Fale novamente com mais clareza."
+                audio_bytes = await container.tts.synthesize(text=fallback_text, lang=locale)
+                wav_bytes = _pcm_to_wav(
+                    audio_bytes=audio_bytes,
+                    sample_rate=container.settings.voice.tts.sample_rate,
+                )
+                await websocket.send_json({"type": "error", "text": fallback_text})
+                await websocket.send_json(
+                    {
+                        "type": "audio",
+                        "audio_base64": base64.b64encode(wav_bytes).decode("ascii")
+                        if wav_bytes
+                        else "",
+                    }
+                )
+                await websocket.send_json({"type": "done", "text": fallback_text})
+                buffer.clear()
+                continue
+
             response = await container.orchestrator.handle_message(
                 session_id=session_id,
-                message=transcript,
+                message=normalized_transcript,
                 locale=locale,
             )
             audio_bytes = await container.tts.synthesize(text=response.response_text, lang=locale)
@@ -97,7 +135,7 @@ async def voice_socket(websocket: WebSocket) -> None:
                 audio_bytes=audio_bytes,
                 sample_rate=container.settings.voice.tts.sample_rate,
             )
-            await websocket.send_json({"type": "transcript", "text": transcript})
+            await websocket.send_json({"type": "transcript", "text": normalized_transcript})
             for chunk in _chunk_response(response.response_text):
                 await websocket.send_json({"type": "chunk", "text": chunk})
             await websocket.send_json(
@@ -108,7 +146,7 @@ async def voice_socket(websocket: WebSocket) -> None:
                     else "",
                 }
             )
-            await websocket.send_json({"type": "done"})
+            await websocket.send_json({"type": "done", "text": response.response_text})
             buffer.clear()
     except WebSocketDisconnect:
         return

@@ -6,8 +6,8 @@ jarvis:
 
 llm:
   provider: "ollama"
-  model: "mistral-nemo:12b-instruct-2407-q4_K_M"
-  fallback_model: "phi3:mini"
+  model: "qwen2.5:7b"
+  fallback_model: "qwen2.5:1.5b"
   base_url: "http://localhost:11434"
   context_window: 8192
   temperature: 0.4
@@ -22,7 +22,7 @@ voice:
   wake_word_enabled: true
   wake_word_mode: "text"
   stt:
-    model: "large-v3"
+    model: "medium"
     device: "cuda"
     compute_type: "float16"
     language: "pt"

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AppNav } from "@/components/app-nav";
+import { apiFetch } from "@/lib/api";
 
 type SkillStatus = {
   description: string;
@@ -11,40 +12,51 @@ type SkillStatus = {
 };
 
 type SkillsResponse = {
-  items: SkillStatus[];
+  items?: SkillStatus[];
 };
-
-const API_BASE_URL = "http://localhost:8000";
 
 export default function SettingsPage() {
   const [skills, setSkills] = useState<SkillStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSkills = async () => {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/skills`);
-      const data = (await response.json()) as SkillsResponse;
-      setSkills(data.items);
-      setIsLoading(false);
+      try {
+        const response = await apiFetch("/api/skills");
+        const data = (await response.json()) as SkillsResponse;
+        setSkills(Array.isArray(data.items) ? data.items : []);
+        setError(null);
+      } catch (loadError) {
+        setSkills([]);
+        setError(loadError instanceof Error ? loadError.message : "Failed to load skills.");
+      } finally {
+        setIsLoading(false);
+      }
     };
     void loadSkills();
   }, []);
 
   const toggleSkill = async (skillName: string, currentEnabled: boolean) => {
-    await fetch(`${API_BASE_URL}/api/skills/${skillName}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled: !currentEnabled }),
-    });
-    setSkills((currentSkills) =>
-      currentSkills.map((skill) =>
-        skill.name === skillName ? { ...skill, enabled: !currentEnabled } : skill
-      )
-    );
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2_000);
+    try {
+      await apiFetch(`/api/skills/${skillName}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !currentEnabled }),
+      });
+      setSkills((currentSkills) =>
+        currentSkills.map((skill) =>
+          skill.name === skillName ? { ...skill, enabled: !currentEnabled } : skill
+        )
+      );
+      setError(null);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2_000);
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "Failed to update skill.");
+    }
   };
 
   return (
@@ -98,6 +110,7 @@ export default function SettingsPage() {
             )}
           </div>
 
+          {error ? <p className="settings-saved">{error}</p> : null}
           {saved ? <p className="settings-saved">Settings saved.</p> : null}
         </section>
       </section>

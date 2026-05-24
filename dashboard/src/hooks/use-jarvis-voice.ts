@@ -52,11 +52,17 @@ export function useJarvisVoice({
       if (payload.type === "chunk" && payload.text) {
         onAssistantChunk(payload.text);
       }
+      if (payload.type === "error" && payload.text) {
+        onAssistantChunk(payload.text);
+      }
       if (payload.type === "audio" && payload.audio_base64) {
         setVoiceState("speaking");
         await playBase64Audio(payload.audio_base64);
       }
       if (payload.type === "done") {
+        if (payload.text) {
+          onAssistantChunk(payload.text);
+        }
         onAssistantDone();
         setVoiceState("idle");
       }
@@ -148,4 +154,3 @@ async function playBase64Audio(audioBase64: string) {
   source.connect(audioContext.destination);
   source.start();
 }
-

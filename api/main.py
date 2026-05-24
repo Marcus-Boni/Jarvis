@@ -91,4 +91,5 @@ async def healthcheck(request: Request) -> dict[str, object]:
         "voice_active": container.audio_pipeline.is_active,
         "ollama_reachable": await container.llm_client.health(),
         "loaded_skills": [skill.name for skill in container.skill_loader.list_all()],
+        "model": container.settings.llm.model,
     }

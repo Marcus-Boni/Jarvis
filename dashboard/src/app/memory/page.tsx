@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Search, Trash2 } from "lucide-react";
 
 import { AppNav } from "@/components/app-nav";
+import { apiFetch } from "@/lib/api";
 
 type MemoryItem = {
   content: string;
@@ -13,33 +14,44 @@ type MemoryItem = {
 };
 
 type MemoryResponse = {
-  items: MemoryItem[];
+  items?: MemoryItem[];
 };
-
-const API_BASE_URL = "http://localhost:8000";
 
 export default function MemoryPage() {
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<MemoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const search = async () => {
     if (!query.trim()) return;
     setIsLoading(true);
-    const response = await fetch(`${API_BASE_URL}/api/memory/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, limit: 10 }),
-    });
-    const data = (await response.json()) as MemoryResponse;
-    setItems(data.items);
-    setIsLoading(false);
+    try {
+      const response = await apiFetch("/api/memory/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, limit: 10 }),
+      });
+      const data = (await response.json()) as MemoryResponse;
+      setItems(Array.isArray(data.items) ? data.items : []);
+      setError(null);
+    } catch (searchError) {
+      setItems([]);
+      setError(searchError instanceof Error ? searchError.message : "Failed to search memory.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const clearMemory = async () => {
     if (!window.confirm("Clear all Jarvis memory? This cannot be undone.")) return;
-    await fetch(`${API_BASE_URL}/api/memory/clear`, { method: "POST" });
-    setItems([]);
+    try {
+      await apiFetch("/api/memory/clear", { method: "POST" });
+      setItems([]);
+      setError(null);
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : "Failed to clear memory.");
+    }
   };
 
   return (
@@ -84,6 +96,7 @@ export default function MemoryPage() {
 
           <div className="stack-list">
             {isLoading ? <p>Searching...</p> : null}
+            {error ? <p>{error}</p> : null}
             {items.map((item, index) => (
               <article key={`${item.source}-${index}`} className="list-card">
                 <div className="list-row">

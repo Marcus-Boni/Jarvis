@@ -19,8 +19,8 @@ class JarvisIdentityConfig(BaseModel):
 
 class LlmConfig(BaseModel):
     provider: str = "ollama"
-    model: str = "mistral-nemo:12b-instruct-2407-q4_K_M"
-    fallback_model: str = "phi3:mini"
+    model: str = "qwen2.5:7b"
+    fallback_model: str = "qwen2.5:1.5b"
     base_url: str = "http://localhost:11434"
     context_window: int = 8192
     temperature: float = 0.4
@@ -29,7 +29,7 @@ class LlmConfig(BaseModel):
 
 
 class SttConfig(BaseModel):
-    model: str = "large-v3"
+    model: str = "medium"
     device: str = "cuda"
     compute_type: str = "float16"
     language: str = "pt"
@@ -101,7 +101,9 @@ class AutoMemorySkillConfig(SkillToggleConfig):
 
 class SkillsConfig(BaseModel):
     app_launcher: AppLauncherSkillConfig = Field(default_factory=AppLauncherSkillConfig)
-    browser_search: BrowserSearchSkillConfig = Field(default_factory=BrowserSearchSkillConfig)
+    browser_search: BrowserSearchSkillConfig = Field(
+        default_factory=BrowserSearchSkillConfig
+    )
     clipboard: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
     file_manager: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
     screenshot: SkillToggleConfig = Field(default_factory=SkillToggleConfig)
@@ -169,7 +171,7 @@ class EnvironmentSecrets(BaseModel):
     notion_token: str = ""
     spotify_client_id: str = ""
     spotify_client_secret: str = ""
-    spotify_redirect_uri: str = "http://localhost:8000/api/oauth/spotify/callback"
+    spotify_redirect_uri: str = "http://127.0.0.1:8000/api/oauth/spotify/callback"
     google_client_secrets_file: str = ""
     google_token_file: str = "data/google_token.json"
     outlook_client_id: str = ""
@@ -205,12 +207,16 @@ class AppSettings(BaseModel):
 
         yaml_payload = _read_yaml(config_path)
         env_settings = EnvironmentSecrets.model_validate(_read_env_file(env_file))
-        settings = cls.model_validate({**yaml_payload, "env": env_settings.model_dump()})
+        settings = cls.model_validate(
+            {**yaml_payload, "env": env_settings.model_dump()}
+        )
         if (
             not settings.notion.default_parent_id
             and settings.skills.notion.default_parent_page_id
         ):
-            settings.notion.default_parent_id = settings.skills.notion.default_parent_page_id
+            settings.notion.default_parent_id = (
+                settings.skills.notion.default_parent_page_id
+            )
         return settings
 
 
@@ -244,7 +250,9 @@ def _read_env_file(env_file: str | Path) -> dict[str, str]:
             payload[key.strip().lower()] = value.strip().strip("\"'")
 
     merged_payload = {
-        "jarvis_auth_token": os.getenv("JARVIS_AUTH_TOKEN", payload.get("jarvis_auth_token", "")),
+        "jarvis_auth_token": os.getenv(
+            "JARVIS_AUTH_TOKEN", payload.get("jarvis_auth_token", "")
+        ),
         "notion_token": os.getenv("NOTION_TOKEN", payload.get("notion_token", "")),
         "spotify_client_id": os.getenv(
             "SPOTIFY_CLIENT_ID", payload.get("spotify_client_id", "")
@@ -254,13 +262,17 @@ def _read_env_file(env_file: str | Path) -> dict[str, str]:
         ),
         "spotify_redirect_uri": os.getenv(
             "SPOTIFY_REDIRECT_URI",
-            payload.get("spotify_redirect_uri", "http://localhost:8000/api/oauth/spotify/callback"),
+            payload.get(
+                "spotify_redirect_uri",
+                "http://127.0.0.1:8000/api/oauth/spotify/callback",
+            ),
         ),
         "google_client_secrets_file": os.getenv(
             "GOOGLE_CLIENT_SECRETS_FILE", payload.get("google_client_secrets_file", "")
         ),
         "google_token_file": os.getenv(
-            "GOOGLE_TOKEN_FILE", payload.get("google_token_file", "data/google_token.json")
+            "GOOGLE_TOKEN_FILE",
+            payload.get("google_token_file", "data/google_token.json"),
         ),
         "outlook_client_id": os.getenv(
             "OUTLOOK_CLIENT_ID", payload.get("outlook_client_id", "")
@@ -269,7 +281,8 @@ def _read_env_file(env_file: str | Path) -> dict[str, str]:
             "OUTLOOK_TENANT_ID", payload.get("outlook_tenant_id", "common")
         ),
         "outlook_token_file": os.getenv(
-            "OUTLOOK_TOKEN_FILE", payload.get("outlook_token_file", "data/outlook_token.json")
+            "OUTLOOK_TOKEN_FILE",
+            payload.get("outlook_token_file", "data/outlook_token.json"),
         ),
     }
     return merged_payload

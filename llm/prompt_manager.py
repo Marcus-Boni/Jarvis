@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from core.models import Intent, RequestContext
 
 
@@ -51,11 +54,13 @@ class PromptManager:
             f"{message.role}: {message.content}" for message in context.messages[-6:]
         ) or "no previous conversation"
         memory = "\n".join(document.content for document in context.memory_documents) or "no memory"
+        now = _current_local_datetime(context.timezone)
         return (
             f"You are {self._jarvis_name}, a local-first personal AI assistant.\n"
             f"Respond in {context.locale} unless the user clearly asks otherwise.\n"
             "Be concise, safe, and practical.\n"
             f"Intent category: {intent.category.value}\n"
+            f"Current local date/time: {now}\n"
             f"Recent transcript:\n{transcript}\n"
             f"Relevant memory:\n{memory}\n"
             f"User preferences: {context.preferences}\n"
@@ -72,3 +77,11 @@ class PromptManager:
             f"Timezone: {timezone}\n"
             f"Request: {user_input}\n"
         )
+
+
+def _current_local_datetime(timezone_name: str) -> str:
+    try:
+        now = datetime.now(ZoneInfo(timezone_name))
+    except ZoneInfoNotFoundError:
+        now = datetime.now()
+    return now.isoformat()

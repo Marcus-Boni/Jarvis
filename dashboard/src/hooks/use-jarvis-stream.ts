@@ -40,20 +40,41 @@ export function useJarvisStream() {
     setIsPending(true);
   }, []);
 
-  const appendAssistantChunk = useCallback((chunk: string) => {
+  const appendAssistantChunk = useCallback((chunk: string, assistantId?: string) => {
+    const targetAssistantId = assistantId ?? pendingAssistantIdRef.current;
+    if (!targetAssistantId) {
+      return;
+    }
+
     startTransition(() => {
       setMessages((currentMessages) =>
         currentMessages.map((message) =>
-          message.id === pendingAssistantIdRef.current
-            ? { ...message, content: `${message.content}${chunk}` }
+          message.id === targetAssistantId
+            ? {
+                ...message,
+                content: message.content ? `${message.content} ${chunk}` : chunk,
+              }
             : message
         )
       );
     });
   }, []);
 
-  const completeAssistantMessage = useCallback(() => {
-    pendingAssistantIdRef.current = null;
+  const completeAssistantMessage = useCallback((finalText?: string, assistantId?: string) => {
+    const targetAssistantId = assistantId ?? pendingAssistantIdRef.current;
+    if (targetAssistantId && finalText?.trim()) {
+      setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+          message.id === targetAssistantId && !message.content.trim()
+            ? { ...message, content: finalText.trim() }
+            : message
+        )
+      );
+    }
+
+    if (pendingAssistantIdRef.current === targetAssistantId) {
+      pendingAssistantIdRef.current = null;
+    }
     setIsPending(false);
   }, []);
 
@@ -73,11 +94,15 @@ export function useJarvisStream() {
 
     socket.onmessage = (event) => {
       const payload = JSON.parse(event.data) as { type: string; text?: string };
+      const assistantId = pendingAssistantIdRef.current;
       if (payload.type === "chunk" && payload.text) {
-        appendAssistantChunk(payload.text);
+        appendAssistantChunk(payload.text, assistantId ?? undefined);
+      }
+      if (payload.type === "error" && payload.text) {
+        appendAssistantChunk(payload.text, assistantId ?? undefined);
       }
       if (payload.type === "done") {
-        completeAssistantMessage();
+        completeAssistantMessage(payload.text, assistantId ?? undefined);
       }
     };
 
@@ -144,4 +169,3 @@ export function useJarvisStream() {
     setDraft,
   };
 }
-

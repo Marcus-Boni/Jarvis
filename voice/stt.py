@@ -29,14 +29,19 @@ class WhisperTranscriber:
 
     def _transcribe_sync(self, audio_bytes: bytes) -> str:
         model = self._get_model()
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_path = Path(temp_file.name)
-            wav_bytes = audio_bytes if audio_bytes[:4] == b"RIFF" else _pcm_to_wav_bytes(
+        detected_suffix = _detect_audio_suffix(audio_bytes)
+        audio_payload = audio_bytes
+        if detected_suffix is None:
+            detected_suffix = ".wav"
+            audio_payload = _pcm_to_wav_bytes(
                 audio_bytes,
                 sample_rate=self._settings.voice.sample_rate,
                 channels=self._settings.voice.channels,
             )
-            temp_file.write(wav_bytes)
+
+        with tempfile.NamedTemporaryFile(suffix=detected_suffix, delete=False) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(audio_payload)
 
         try:
             segments, _ = model.transcribe(
@@ -86,3 +91,18 @@ def _pcm_to_wav_bytes(audio_bytes: bytes, sample_rate: int, channels: int) -> by
     finally:
         temp_path.unlink(missing_ok=True)
 
+
+def _detect_audio_suffix(audio_bytes: bytes) -> str | None:
+    if audio_bytes[:4] == b"RIFF":
+        return ".wav"
+    if audio_bytes[:4] == b"OggS":
+        return ".ogg"
+    if audio_bytes[:4] == b"fLaC":
+        return ".flac"
+    if audio_bytes[:4] == b"ID3":
+        return ".mp3"
+    if audio_bytes[:4] == b"\x1a\x45\xdf\xa3":
+        return ".webm"
+    if audio_bytes[4:8] == b"ftyp":
+        return ".m4a"
+    return None

@@ -4,7 +4,9 @@ from typing import ClassVar
 
 from core.error_telemetry import ErrorTelemetry
 from core.models import Intent, IntentCategory, RequestContext, SkillResult
-from core.orchestrator import Orchestrator
+from datetime import datetime
+
+from core.orchestrator import Orchestrator, _build_local_conversation_response
 from core.runtime_events import RuntimeEventBroker
 from skills.base_skill import BaseSkill
 
@@ -116,3 +118,14 @@ async def test_orchestrator_executes_matching_skill() -> None:
     assert response.response_text == "skill response"
     assert response.used_fallback_llm is False
     assert response.skill_results[0].skill_name == "helpful"
+
+
+def test_local_conversation_response_answers_current_date() -> None:
+    response = _build_local_conversation_response(
+        message="Boa noite, que dia e hoje?",
+        locale="pt-BR",
+        timezone="America/Sao_Paulo",
+        now=datetime(2026, 4, 22, 21, 15),
+    )
+
+    assert response == "Hoje e quarta-feira, 22 de abril de 2026."

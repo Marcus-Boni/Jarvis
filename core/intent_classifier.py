@@ -71,6 +71,20 @@ class IntentClassifier:
 
 def _classify_with_rules(text: str, locale: str) -> Intent | None:
     lowered_text = text.lower().strip()
+    if any(
+        token in lowered_text
+        for token in [
+            "que dia é hoje", "que dia e hoje", "data de hoje", "qual a data de hoje",
+            "que horas são", "que horas sao", "hora agora", "horario atual", "horário atual",
+        ]
+    ):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.UNKNOWN,
+            confidence=0.95,
+            language=locale,
+            actions=[text],
+        )
     if any(token in lowered_text for token in ["spotify", "pause", "pausa", "proxima", "next"]):
         return Intent(
             raw_text=text,
