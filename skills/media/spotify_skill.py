@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import subprocess
+import time
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -12,6 +15,11 @@ from core.error_telemetry import ErrorTelemetry
 from core.models import Intent, IntentCategory, RequestContext, SkillResult
 from core.runtime_events import RuntimeEventBroker
 from skills.base_skill import BaseSkill
+
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+_SPOTIFY_EXE = Path(
+    rf"C:\Users\{os.environ.get('USERNAME', 'User')}\AppData\Local\Microsoft\WindowsApps\Spotify.exe"
+)
 
 
 class SpotifySkill(BaseSkill):
@@ -63,19 +71,28 @@ class SpotifySkill(BaseSkill):
                 data=result_payload,
             )
         except Exception as exc:  # pragma: no cover
+            exc_str = str(exc)
             await self._error_telemetry.record(
                 component=self.name,
                 error=type(exc).__name__,
-                message=str(exc),
+                message=exc_str,
                 metadata={"command_name": command_name, "query": query},
             )
+            if "NO_ACTIVE_DEVICE" in exc_str or (
+                "404" in exc_str and "player" in exc_str.lower()
+            ):
+                msg = (
+                    "Nenhum dispositivo Spotify ativo encontrado. "
+                    "Abra o Spotify primeiro e tente novamente."
+                )
+            elif "token" in exc_str.lower() or "401" in exc_str or "403" in exc_str:
+                msg = "Autenticação Spotify expirada. Reinicie o Jarvis para reautenticar."
+            else:
+                msg = f"Spotify falhou: {type(exc).__name__}. Verifique se o Spotify está aberto."
             return SkillResult(
                 skill_name=self.name,
                 success=False,
-                message=(
-                    "Spotify control failed safely. "
-                    "Check local credentials and playback state."
-                ),
+                message=msg,
             )
 
     def _get_client(self) -> Any:
@@ -111,7 +128,31 @@ class SpotifySkill(BaseSkill):
         self._client = spotipy.Spotify(auth_manager=auth_manager)
         return self._client
 
+    def _launch_spotify_app(self) -> bool:
+        if not _SPOTIFY_EXE.exists():
+            return False
+        subprocess.Popen([str(_SPOTIFY_EXE)], creationflags=_CREATE_NO_WINDOW)
+        time.sleep(4)
+        return True
+
     def _run_command(
+        self,
+        spotify_client: Any,
+        command_name: str,
+        query: str | None,
+        volume: int | None,
+    ) -> dict[str, Any]:
+        try:
+            return self._do_command(spotify_client, command_name, query, volume)
+        except Exception as exc:
+            exc_str = str(exc)
+            if "NO_ACTIVE_DEVICE" in exc_str or "404" in exc_str:
+                launched = self._launch_spotify_app()
+                if launched:
+                    return self._do_command(spotify_client, command_name, query, volume)
+            raise
+
+    def _do_command(
         self,
         spotify_client: Any,
         command_name: str,

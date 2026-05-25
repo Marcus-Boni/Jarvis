@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { AlertCircle, Cpu, Database, Layers, Mic } from "lucide-react";
 
 import { API_BASE_URL, apiFetch } from "@/lib/api";
+import { useConversationStore } from "@/lib/conversation-store";
 import { useJarvisEvents } from "@/hooks/use-jarvis-events";
 import { useJarvisStream } from "@/hooks/use-jarvis-stream";
 import { useJarvisVoice } from "@/hooks/use-jarvis-voice";
@@ -32,6 +33,8 @@ type HealthPayload = {
 };
 
 export default function HomePage() {
+  const activeId = useConversationStore((s) => s.activeId);
+
   const {
     appendAssistantChunk,
     appendUserMessage,
@@ -42,7 +45,7 @@ export default function HomePage() {
     messages,
     sendMessage,
     setDraft,
-  } = useJarvisStream();
+  } = useJarvisStream(activeId);
 
   const { events } = useJarvisEvents();
 

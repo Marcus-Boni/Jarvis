@@ -23,7 +23,7 @@ _USERNAME = os.environ.get("USERNAME", "User")
 APP_MAP: dict[str, list[str]] = {
     "vscode": [rf"C:\Users\{_USERNAME}\AppData\Local\Programs\Microsoft VS Code\Code.exe"],
     "code": [rf"C:\Users\{_USERNAME}\AppData\Local\Programs\Microsoft VS Code\Code.exe"],
-    "spotify": [rf"C:\Users\{_USERNAME}\AppData\Roaming\Spotify\Spotify.exe"],
+    "spotify": [rf"C:\Users\{_USERNAME}\AppData\Local\Microsoft\WindowsApps\Spotify.exe"],
     "chrome": [r"C:\Program Files\Google\Chrome\Application\chrome.exe"],
     "firefox": [r"C:\Program Files\Mozilla Firefox\firefox.exe"],
     "edge": [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"],

@@ -85,6 +85,14 @@ def _classify_with_rules(text: str, locale: str) -> Intent | None:
             language=locale,
             actions=[text],
         )
+    if any(token in lowered_text for token in ["abra ", "abre ", "open ", "launch "]):
+        return Intent(
+            raw_text=text,
+            category=IntentCategory.SYSTEM_CONTROL,
+            confidence=0.79,
+            language=locale,
+            actions=[text],
+        )
     if any(token in lowered_text for token in ["spotify", "pause", "pausa", "proxima", "next"]):
         return Intent(
             raw_text=text,
@@ -125,14 +133,6 @@ def _classify_with_rules(text: str, locale: str) -> Intent | None:
             raw_text=text,
             category=IntentCategory.NOTION,
             confidence=0.82,
-            language=locale,
-            actions=[text],
-        )
-    if any(token in lowered_text for token in ["abra ", "abre ", "open ", "launch "]):
-        return Intent(
-            raw_text=text,
-            category=IntentCategory.SYSTEM_CONTROL,
-            confidence=0.79,
             language=locale,
             actions=[text],
         )

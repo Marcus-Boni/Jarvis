@@ -3,15 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import {
-  Bot,
-  ChevronLeft,
-  ChevronRight,
-  Database,
-  LayoutDashboard,
-  Settings2,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bot, ChevronLeft, ChevronRight, Database, LayoutDashboard, Settings2 } from "lucide-react";
+import { ConversationList } from "@/components/conversation-list";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -52,7 +46,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-1 overflow-hidden" aria-label="Principal">
+      <nav className="shrink-0 px-2 py-3 space-y-1" aria-label="Principal">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href;
           return (
@@ -92,11 +86,17 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Conversation history */}
+      <div className="flex-1 min-h-0 overflow-hidden border-t border-border">
+        <ConversationList collapsed={collapsed} />
+      </div>
+
       {/* Collapse toggle */}
       <button
+        type="button"
         onClick={() => setCollapsed((v) => !v)}
         className={cn(
-          "flex items-center justify-center w-full h-12 border-t border-border",
+          "flex items-center justify-center w-full h-12 border-t border-border shrink-0",
           "text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-colors"
         )}
         aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
