@@ -58,6 +58,16 @@ APP_ALIASES: dict[str, str] = {
     "terminal": "terminal",
     "calculadora": "calculator",
     "bloco de notas": "notepad",
+    "gerenciador de arquivos": "explorer",
+    "explorador de arquivos": "explorer",
+    "file manager": "explorer",
+    "windows explorer": "explorer",
+    "pasta downloads": "explorer",
+}
+
+_FILE_MANAGER_ALIASES = frozenset(APP_ALIASES) - {
+    "visual studio code", "vs code", "navegador", "browser", "spotify",
+    "discord", "terminal", "calculadora", "bloco de notas",
 }
 
 
@@ -90,6 +100,10 @@ class AppLauncherSkill(BaseSkill):
         return None
 
     async def can_handle(self, intent: Intent) -> float:
+        lowered = intent.raw_text.lower()
+        # Explicit file-manager / explorer phrases beat file_manager_skill's 0.84
+        if any(alias in lowered for alias in _FILE_MANAGER_ALIASES):
+            return 0.96
         if intent.category is IntentCategory.SYSTEM_CONTROL:
             app_name = self._resolve_app_name(intent.raw_text)
             return 0.95 if app_name else 0.72
@@ -108,7 +122,7 @@ class AppLauncherSkill(BaseSkill):
             )
 
         try:
-            result = await asyncio.to_thread(self._open_or_focus_app, app_key.lower())
+            result = await asyncio.to_thread(self._open_or_focus_app, app_key.lower(), intent.raw_text)
             await self._event_broker.publish(
                 "activity",
                 {"component": self.name, "message": result.message},
@@ -127,7 +141,20 @@ class AppLauncherSkill(BaseSkill):
                 message=f"Erro ao abrir {app_key}. O erro foi registrado.",
             )
 
-    def _open_or_focus_app(self, app_key: str) -> SkillResult:
+    def _open_or_focus_app(self, app_key: str, raw_text: str = "") -> SkillResult:
+        if app_key == "explorer":
+            # Open specific folder if mentioned, otherwise open the default explorer view
+            folder = _extract_target_folder(raw_text)
+            cmd = ["explorer.exe", str(folder)] if folder else ["explorer.exe"]
+            subprocess.Popen(cmd, creationflags=_CREATE_NO_WINDOW)
+            label = folder.name if folder else "Explorador de Arquivos"
+            return SkillResult(
+                skill_name=self.name,
+                success=True,
+                message=f"{label} aberto.",
+                data={"action": "launched", "app": "explorer", "folder": str(folder) if folder else None},
+            )
+
         if app_key == "browser":
             opened = open_url_in_default_browser("about:blank")
             return SkillResult(
@@ -168,6 +195,29 @@ class AppLauncherSkill(BaseSkill):
             message=f"{app_key.title()} aberto com sucesso.",
             data={"action": "launched", "app": app_key, "command": command},
         )
+
+
+_FOLDER_MAP: dict[str, Path] = {
+    "downloads": Path.home() / "Downloads",
+    "documentos": Path.home() / "Documents",
+    "documents": Path.home() / "Documents",
+    "desktop": Path.home() / "Desktop",
+    "área de trabalho": Path.home() / "Desktop",
+    "area de trabalho": Path.home() / "Desktop",
+    "imagens": Path.home() / "Pictures",
+    "pictures": Path.home() / "Pictures",
+    "videos": Path.home() / "Videos",
+    "músicas": Path.home() / "Music",
+    "musicas": Path.home() / "Music",
+}
+
+
+def _extract_target_folder(raw_text: str) -> Path | None:
+    lowered = raw_text.lower()
+    for name, path in _FOLDER_MAP.items():
+        if name in lowered:
+            return path
+    return None
 
 
 def _resolve_command(app_key: str) -> list[str] | None:

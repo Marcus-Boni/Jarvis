@@ -22,3 +22,4 @@ poetry.lock
 /.omx
 /credentials
 /models
+/.playwright-mcp

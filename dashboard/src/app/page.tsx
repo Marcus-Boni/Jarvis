@@ -2,15 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { AppNav } from "@/components/app-nav";
-import { ChatShell } from "@/components/chat-shell";
-import { StatusCard } from "@/components/status-card";
+import { motion } from "framer-motion";
+import { AlertCircle, Cpu, Database, Layers, Mic } from "lucide-react";
+
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 import { useJarvisEvents } from "@/hooks/use-jarvis-events";
 import { useJarvisStream } from "@/hooks/use-jarvis-stream";
 import { useJarvisVoice } from "@/hooks/use-jarvis-voice";
-import { API_BASE_URL, apiFetch } from "@/lib/api";
-
-type StatusTone = "success" | "warning" | "info" | "default";
+import { ActivityFeed } from "@/components/activity-feed";
+import { AppLayout } from "@/components/app-layout";
+import { ChatShell } from "@/components/chat-shell";
+import { CollapsibleSection } from "@/components/collapsible-section";
+import { SkillList } from "@/components/skill-list";
+import { StatusCard, type StatusTone } from "@/components/status-card";
 
 type SkillStatus = {
   description: string;
@@ -39,12 +43,15 @@ export default function HomePage() {
     sendMessage,
     setDraft,
   } = useJarvisStream();
+
   const { events } = useJarvisEvents();
+
   const { toggleListening, voiceConnectionStatus, voiceState } = useJarvisVoice({
     onAssistantChunk: appendAssistantChunk,
     onAssistantDone: completeAssistantMessage,
     onTranscript: appendUserMessage,
   });
+
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [skills, setSkills] = useState<SkillStatus[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -62,9 +69,7 @@ export default function HomePage() {
         setSkills(Array.isArray(nextSkills.items) ? nextSkills.items : []);
         setLoadError(null);
       } catch (error) {
-        setHealth(null);
-        setSkills([]);
-        setLoadError(error instanceof Error ? error.message : "Failed to load dashboard data.");
+        setLoadError(error instanceof Error ? error.message : "Falha ao carregar dados.");
       }
     };
     void loadData();
@@ -73,27 +78,33 @@ export default function HomePage() {
   const statusCards = useMemo(
     () => [
       {
+        icon: Cpu,
         label: "Modelo",
-        value: health?.model ?? (health?.ollama_reachable ? "Reachable" : "Offline"),
-        detail: health?.ollama_reachable ? "Ollama respondeu ao health check" : "Backend não consegue alcançar Ollama",
+        value: health?.model ?? (health?.ollama_reachable ? "Acessível" : "Offline"),
+        detail: health?.ollama_reachable
+          ? "Ollama respondeu ao health check"
+          : "Backend não alcança o Ollama",
         tone: (health?.ollama_reachable ? "success" : "warning") as StatusTone,
       },
       {
+        icon: Database,
         label: "Memória",
         value: "ChromaDB",
-        detail: "Memória vetorial persistente com busca semântica.",
+        detail: "Memória vetorial persistente com busca semântica",
         tone: "info" as StatusTone,
       },
       {
+        icon: Mic,
         label: "Voz",
-        value: voiceState,
-        detail: `Socket de voz ${voiceConnectionStatus}.`,
+        value: voiceState === "idle" ? "ocioso" : voiceState,
+        detail: `Socket de voz ${voiceConnectionStatus === "connected" ? "conectado" : voiceConnectionStatus}`,
         tone: (voiceState === "idle" ? "default" : "success") as StatusTone,
       },
       {
+        icon: Layers,
         label: "Skills",
         value: `${skills.filter((s) => s.enabled).length} / ${skills.length}`,
-        detail: "Módulos ativos carregados do registry.",
+        detail: "Módulos ativos carregados do registry",
         tone: "default" as StatusTone,
       },
     ],
@@ -112,40 +123,88 @@ export default function HomePage() {
       );
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Failed to update skill.");
+      setLoadError(error instanceof Error ? error.message : "Falha ao atualizar módulo.");
     }
   };
 
-  return (
-    <main className="app-shell">
-      <aside className="left-rail panel">
-        <div className="rail-header">
-          <span className="eyebrow">Jarvis</span>
-          <h1>Painel de Controle</h1>
-          <p>Modelos locais, memória, voz e skills de sistema.</p>
-        </div>
-        <AppNav />
-        <section className="rail-meter">
-          <div>
-            <span className="eyebrow">Runtime</span>
-            <strong>{health?.status === "ok" ? "Online" : "Verificando…"}</strong>
-          </div>
-          <div className="meter-track" aria-hidden="true">
-            <span className="meter-fill" />
-          </div>
-          <p>{health?.model ? `Modelo ativo: ${health.model}` : "Aguardando backend…"}</p>
-        </section>
-      </aside>
-
-      <section className="workspace" id="workspace">
-        <section className="status-grid" aria-label="Status do sistema">
-          {statusCards.map((card) => (
-            <StatusCard key={card.label} {...card} />
+  /* ── Right panel (shared between desktop aside and mobile drawer) ── */
+  const rightPanelContent = (
+    <>
+      {/* Config info */}
+      <CollapsibleSection title="Configuração" defaultOpen>
+        <div className="grid grid-cols-2 gap-px bg-border/50 overflow-hidden rounded-b-lg">
+          {[
+            { label: "Modelo", value: health?.model ?? "—" },
+            {
+              label: "Voz",
+              value:
+                voiceConnectionStatus === "connected" ? "conectada" : voiceConnectionStatus,
+            },
+            { label: "Idioma", value: "pt-BR" },
+            { label: "Transporte", value: "WS + REST" },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-bg-card px-3 py-2.5">
+              <p className="text-2xs font-mono uppercase tracking-wider text-text-muted mb-1">
+                {label}
+              </p>
+              <p className="text-xs font-semibold text-text-primary truncate">{value}</p>
+            </div>
           ))}
-        </section>
+        </div>
+      </CollapsibleSection>
 
-        {loadError ? <p className="panel error-banner">{loadError}</p> : null}
+      {/* Skills */}
+      <CollapsibleSection
+        title="Módulos"
+        badge={`${skills.filter((s) => s.enabled).length}/${skills.length}`}
+        defaultOpen
+      >
+        <div className="max-h-60 overflow-y-auto">
+          <SkillList
+            skills={skills}
+            onToggle={(name, enabled) => void toggleSkill(name, enabled)}
+          />
+        </div>
+      </CollapsibleSection>
 
+      {/* Activity */}
+      <CollapsibleSection
+        title="Atividade"
+        badge={events.length > 0 ? events.length : undefined}
+        defaultOpen={false}
+      >
+        <ActivityFeed events={events} />
+      </CollapsibleSection>
+    </>
+  );
+
+  return (
+    <AppLayout rightPanel={rightPanelContent} mainOverflowHidden>
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+        className="flex flex-col flex-1 gap-3 min-h-0 overflow-hidden"
+      >
+        {/* Status cards */}
+        <CollapsibleSection title="Status do Sistema" defaultOpen className="shrink-0">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 p-3">
+            {statusCards.map((card) => (
+              <StatusCard key={card.label} {...card} />
+            ))}
+          </div>
+        </CollapsibleSection>
+
+        {/* Error banner */}
+        {loadError && (
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg
+            bg-status-danger-soft border border-status-danger/20 text-status-danger text-xs shrink-0">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{loadError}</span>
+          </div>
+        )}
+
+        {/* Chat — fills remaining height */}
         <ChatShell
           connectionStatus={connectionStatus}
           draft={draft}
@@ -156,77 +215,7 @@ export default function HomePage() {
           setDraft={setDraft}
           voiceState={voiceState}
         />
-      </section>
-
-      <aside className="right-rail">
-        <section className="panel" id="config">
-          <span className="eyebrow">Configuração</span>
-          <div className="config-grid">
-            <div className="config-item">
-              <span>Modelo</span>
-              <strong>{health?.model ?? "—"}</strong>
-            </div>
-            <div className="config-item">
-              <span>Voz</span>
-              <strong>{voiceConnectionStatus}</strong>
-            </div>
-            <div className="config-item">
-              <span>Idioma</span>
-              <strong>pt-BR</strong>
-            </div>
-            <div className="config-item">
-              <span>Transporte</span>
-              <strong>WS + REST</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel" id="skills">
-          <div className="panel-header">
-            <div>
-              <span className="eyebrow">Skills</span>
-              <h2>Módulos</h2>
-            </div>
-          </div>
-          <div className="stack-list">
-            {skills.map((skill) => (
-              <article key={skill.name} className="list-card">
-                <div className="list-row">
-                  <strong>{skill.name}</strong>
-                  <button
-                    className={`status-chip ${skill.enabled ? "online" : "idle"}`}
-                    type="button"
-                    onClick={() => void toggleSkill(skill.name, skill.enabled)}
-                  >
-                    {skill.enabled ? "ativo" : "inativo"}
-                  </button>
-                </div>
-                <p>{skill.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel" id="activity">
-          <div className="panel-header">
-            <div>
-              <span className="eyebrow">Trace</span>
-              <h2>Atividade Recente</h2>
-            </div>
-          </div>
-          <ol className="timeline">
-            {events.length === 0 ? (
-              <li className="timeline-empty">Nenhuma atividade ainda.</li>
-            ) : (
-              events.slice(-10).map((event) => (
-                <li key={`${event.timestamp}-${event.type}`}>
-                  <strong>{event.type}</strong>: {JSON.stringify(event.payload)}
-                </li>
-              ))
-            )}
-          </ol>
-        </section>
-      </aside>
-    </main>
+      </motion.div>
+    </AppLayout>
   );
 }

@@ -19,6 +19,20 @@ SAFE_SEARCH_ROOTS = [
     Path.home() / "Desktop",
     Path.home() / "Projects",
 ]
+
+KNOWN_FOLDERS: dict[str, Path] = {
+    "downloads": Path.home() / "Downloads",
+    "documentos": Path.home() / "Documents",
+    "documents": Path.home() / "Documents",
+    "desktop": Path.home() / "Desktop",
+    "área de trabalho": Path.home() / "Desktop",
+    "area de trabalho": Path.home() / "Desktop",
+    "imagens": Path.home() / "Pictures",
+    "pictures": Path.home() / "Pictures",
+    "videos": Path.home() / "Videos",
+    "músicas": Path.home() / "Music",
+    "musicas": Path.home() / "Music",
+}
 PREVIEWABLE_SUFFIXES = {".txt", ".md", ".json", ".py", ".toml", ".yaml", ".yml"}
 
 
@@ -94,14 +108,40 @@ class FileManagerSkill(BaseSkill):
                     data={"file": str(target), "preview": _read_preview(target)},
                 )
 
-            if any(token in lowered_text for token in ["liste", "list", "mostrar"]):
-                target_dir = Path(query) if query else Path.home() / "Documents"
+            _list_tokens = [
+                "liste", "list", "mostrar", "mostra",
+                "o que tem", "o que há", "o que ha",
+                "quais arquivos", "conteúdo", "conteudo",
+                "ver pasta", "ver arquivos",
+            ]
+            if any(token in lowered_text for token in _list_tokens):
+                target_dir = _resolve_known_folder(lowered_text) or (
+                    Path(query) if query else Path.home() / "Documents"
+                )
                 files = await asyncio.to_thread(_list_directory, target_dir)
+                if not files:
+                    return SkillResult(
+                        skill_name=self.name,
+                        success=True,
+                        message=f"A pasta '{target_dir.name}' está vazia ou inacessível.",
+                        data={"files": [], "folder": str(target_dir)},
+                    )
                 return SkillResult(
                     skill_name=self.name,
                     success=True,
                     message=_format_file_list(files[:20]),
                     data={"files": [str(file_path) for file_path in files[:20]]},
+                )
+
+            # Implicit listing: "pasta X" without explicit verb
+            inferred_folder = _resolve_known_folder(lowered_text)
+            if inferred_folder:
+                files = await asyncio.to_thread(_list_directory, inferred_folder)
+                return SkillResult(
+                    skill_name=self.name,
+                    success=True,
+                    message=_format_file_list(files[:20]) if files else f"'{inferred_folder.name}' está vazio.",
+                    data={"files": [str(f) for f in files[:20]]},
                 )
 
             return SkillResult(
@@ -115,6 +155,13 @@ class FileManagerSkill(BaseSkill):
                 success=False,
                 message=f"Erro no gerenciador de arquivos: {exc}",
             )
+
+
+def _resolve_known_folder(lowered_text: str) -> Path | None:
+    for name, path in KNOWN_FOLDERS.items():
+        if name in lowered_text:
+            return path
+    return None
 
 
 def _search_files(filename: str, roots: list[Path]) -> list[Path]:

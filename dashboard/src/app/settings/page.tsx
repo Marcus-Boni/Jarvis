@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-import { AppNav } from "@/components/app-nav";
+import { motion } from "framer-motion";
+import { CheckCircle2, Info, Package, Settings2 } from "lucide-react";
+
 import { apiFetch } from "@/lib/api";
+import { AppLayout } from "@/components/app-layout";
+import { CollapsibleSection } from "@/components/collapsible-section";
 
 type SkillStatus = {
   description: string;
@@ -18,7 +22,7 @@ type SkillsResponse = {
 export default function SettingsPage() {
   const [skills, setSkills] = useState<SkillStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,8 +34,7 @@ export default function SettingsPage() {
         setSkills(Array.isArray(data.items) ? data.items : []);
         setError(null);
       } catch (loadError) {
-        setSkills([]);
-        setError(loadError instanceof Error ? loadError.message : "Failed to load skills.");
+        setError(loadError instanceof Error ? loadError.message : "Falha ao carregar módulos.");
       } finally {
         setIsLoading(false);
       }
@@ -46,98 +49,119 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: !currentEnabled }),
       });
-      setSkills((currentSkills) =>
-        currentSkills.map((skill) =>
-          skill.name === skillName ? { ...skill, enabled: !currentEnabled } : skill
-        )
+      setSkills((current) =>
+        current.map((s) => (s.name === skillName ? { ...s, enabled: !currentEnabled } : s))
       );
       setError(null);
-      setSaved(true);
-      window.setTimeout(() => setSaved(false), 2_000);
+      setSavedId(skillName);
+      window.setTimeout(() => setSavedId(null), 1_800);
     } catch (toggleError) {
-      setError(toggleError instanceof Error ? toggleError.message : "Failed to update skill.");
+      setError(toggleError instanceof Error ? toggleError.message : "Falha ao atualizar módulo.");
     }
   };
 
+  const activeCount = skills.filter((s) => s.enabled).length;
+
   return (
-    <main className="app-shell">
-      <aside className="left-rail panel">
-        <div className="rail-header">
-          <span className="eyebrow">Configuration</span>
-          <h1>Settings</h1>
-          <p>Toggle runtime modules and inspect the currently loaded skill registry.</p>
-        </div>
-        <AppNav />
-      </aside>
-
-      <section className="workspace">
-        <header className="hero panel">
-          <div>
-            <span className="eyebrow">Phase 3</span>
-            <h2>Skill modules and local runtime controls</h2>
-          </div>
-        </header>
-
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <span className="eyebrow">Skill Modules</span>
-              <h2>Runtime Toggles</h2>
+    <AppLayout>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
+        className="flex flex-col gap-4"
+      >
+          {/* Page header */}
+          <div className="shrink-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Settings2 size={16} className="text-accent" />
+              <span className="text-xs font-mono uppercase tracking-widest text-text-muted">
+                Configuração
+              </span>
             </div>
+            <h1 className="text-xl font-bold text-text-primary">Configurações</h1>
+            <p className="text-sm text-text-secondary mt-1">
+              Gerencie os módulos de runtime e inspecione o registry de skills.
+            </p>
           </div>
 
-          <div className="stack-list">
+          {/* Error banner */}
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-status-danger-soft border border-status-danger/20 text-status-danger text-xs">
+              <Info size={14} className="shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Skills section */}
+          <CollapsibleSection
+            title="Módulos de Runtime"
+            badge={isLoading ? undefined : `${activeCount}/${skills.length} ativos`}
+            defaultOpen
+          >
             {isLoading ? (
-              <p>Loading skills...</p>
+              <div className="flex items-center gap-3 px-4 py-6 text-text-muted text-sm">
+                <Package size={16} className="animate-pulse" />
+                <span>Carregando módulos…</span>
+              </div>
             ) : (
-              skills.map((skill) => (
-                <article key={skill.name} className="list-card">
-                  <div className="list-row">
-                    <div>
-                      <strong>{skill.name}</strong>
-                      <p>{skill.description}</p>
+              <ul className="space-y-0">
+                {skills.map((skill) => (
+                  <li
+                    key={skill.name}
+                    className="flex items-center gap-3 px-4 py-3 border-b border-border/50 last:border-0 hover:bg-bg-hover/30 transition-colors"
+                  >
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
+                        skill.enabled
+                          ? "bg-status-success shadow-[0_0_5px_rgba(52,211,153,0.5)]"
+                          : "bg-text-muted"
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-text-primary font-mono">{skill.name}</p>
+                      <p className="text-2xs text-text-muted mt-0.5 truncate">{skill.description}</p>
                     </div>
+
+                    {/* Saved indicator */}
+                    {savedId === skill.name && (
+                      <CheckCircle2 size={13} className="text-status-success shrink-0" />
+                    )}
+
                     <button
-                      className={`status-chip ${skill.enabled ? "online" : "idle"}`}
                       type="button"
                       onClick={() => void toggleSkill(skill.name, skill.enabled)}
+                      aria-label={skill.enabled ? `Desativar ${skill.name}` : `Ativar ${skill.name}`}
+                      className={`shrink-0 text-2xs font-mono px-2.5 py-1 rounded border transition-all duration-150 ${
+                        skill.enabled
+                          ? "text-status-success bg-status-success-soft border-status-success/20 hover:bg-status-danger-soft hover:text-status-danger hover:border-status-danger/20"
+                          : "text-text-muted bg-bg-elevated border-border hover:text-accent hover:border-accent/30 hover:bg-accent/10"
+                      }`}
                     >
-                      {skill.enabled ? "enabled" : "disabled"}
+                      {skill.enabled ? "ativo" : "inativo"}
                     </button>
-                  </div>
-                </article>
-              ))
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
+          </CollapsibleSection>
 
-          {error ? <p className="settings-saved">{error}</p> : null}
-          {saved ? <p className="settings-saved">Settings saved.</p> : null}
-        </section>
-      </section>
-
-      <aside className="right-rail">
-        <section className="panel">
-          <span className="eyebrow">Notes</span>
-          <div className="config-grid">
-            <div className="config-item">
-              <span>Scope</span>
-              <strong>Local Runtime</strong>
+          {/* Info section */}
+          <CollapsibleSection title="Informações do Runtime" defaultOpen={false}>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border/50 rounded-b-lg overflow-hidden">
+              {[
+                { label: "Escopo", value: "Runtime Local" },
+                { label: "Persistência", value: "Imediata" },
+                { label: "Transporte", value: "FastAPI REST" },
+                { label: "Fase", value: "3" },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-bg-card px-3 py-3">
+                  <p className="text-2xs font-mono uppercase tracking-wider text-text-muted mb-1">{label}</p>
+                  <p className="text-xs font-semibold text-text-primary">{value}</p>
+                </div>
+              ))}
             </div>
-            <div className="config-item">
-              <span>Persistence</span>
-              <strong>Immediate</strong>
-            </div>
-            <div className="config-item">
-              <span>Transport</span>
-              <strong>FastAPI skill toggle</strong>
-            </div>
-            <div className="config-item">
-              <span>Phase</span>
-              <strong>3</strong>
-            </div>
-          </div>
-        </section>
-      </aside>
-    </main>
+          </CollapsibleSection>
+      </motion.div>
+    </AppLayout>
   );
 }

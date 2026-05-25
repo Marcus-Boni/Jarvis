@@ -1,30 +1,30 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import "./globals.css";
 
-const plexSans = IBM_Plex_Sans({
+const geistSans = Geist({
   subsets: ["latin"],
-  variable: "--font-sans",
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-geist-sans",
 });
 
-const plexMono = IBM_Plex_Mono({
+const geistMono = Geist_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
-  weight: ["400", "500", "600"],
+  variable: "--font-geist-mono",
 });
 
 export const metadata: Metadata = {
-  title: "Jarvis Dashboard",
-  description: "Local-first control surface for the Jarvis assistant.",
+  title: "Jarvis — Painel de Controle",
+  description: "Assistente local com modelos Ollama, memória vetorial e skills de sistema.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="pt-BR">
-      <body className={`${plexSans.variable} ${plexMono.variable}`}>{children}</body>
+    <html lang="pt-BR" className="dark">
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+        {children}
+      </body>
     </html>
   );
 }

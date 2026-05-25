@@ -2,5 +2,13 @@
   "python.defaultInterpreterPath": "C:/Users/mgalv/AppData/Local/pypoetry/Cache/virtualenvs/jarvis-B-h89VLj-py3.11/Scripts/python.exe",
   "python.analysis.typeCheckingMode": "basic",
   "python-envs.defaultEnvManager": "ms-python.python:poetry",
-  "python-envs.defaultPackageManager": "ms-python.python:poetry"
+  "python-envs.defaultPackageManager": "ms-python.python:poetry",
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false,
+  "css.lint.unknownAtRules": "ignore",
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  }
 }
